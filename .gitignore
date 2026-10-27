@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Obsidian workspace settings (the vault itself is plain Markdown)
+.obsidian/
+
+# Local runtime data: audit ledger files are evidence, not source. Anchor hashes
+# (output of `agentctl head`) may be committed instead.
+.agents/ledger/
+
+# Editor and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
