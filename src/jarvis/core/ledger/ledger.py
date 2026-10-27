@@ -73,6 +73,19 @@ def _fail(count: int, head_seq: int | None, head_hash: str, seq: int, msg: str) 
     return VerifyResult(False, count, head_seq, head_hash, error=msg, error_seq=seq)
 
 
+class LedgerTransaction:
+    """Handle valid only inside ``Ledger.transaction()``; the writer lock is already held."""
+
+    def __init__(self, ledger: Ledger) -> None:
+        self._ledger = ledger
+
+    def records(self) -> Iterator[dict[str, Any]]:
+        return self._ledger.records()
+
+    def append(self, event: Event) -> dict[str, Any]:
+        return self._ledger._append_locked(event.model_dump(mode="json"))
+
+
 class Ledger:
     def __init__(self, path: str | Path, lock_timeout: float = 5.0) -> None:
         self.path = Path(path)
@@ -82,22 +95,34 @@ class Ledger:
 
     def append(self, event: Event) -> dict[str, Any]:
         """Validate the tail, then append ``event``. Returns the stored record."""
-        payload = event.model_dump(mode="json")
         with self._lock():
-            last = self._last_record()
-            seq = 0 if last is None else last["seq"] + 1
-            prev = GENESIS_HASH if last is None else last["hash"]
-            record = {
-                "seq": seq,
-                "prev_hash": prev,
-                "event": payload,
-                "hash": compute_hash(seq, prev, payload),
-            }
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.path, "ab") as fh:
-                fh.write(canonical_json(record) + b"\n")
-                fh.flush()
-                os.fsync(fh.fileno())
+            return self._append_locked(event.model_dump(mode="json"))
+
+    @contextmanager
+    def transaction(self) -> Iterator[LedgerTransaction]:
+        """Hold the writer lock across a read-decide-append sequence.
+
+        Used by the policy gate so that cumulative limits (for example total diff lines per
+        task) cannot be exceeded by concurrent checks that all read the same history.
+        """
+        with self._lock():
+            yield LedgerTransaction(self)
+
+    def _append_locked(self, payload: dict[str, Any]) -> dict[str, Any]:
+        last = self._last_record()
+        seq = 0 if last is None else last["seq"] + 1
+        prev = GENESIS_HASH if last is None else last["hash"]
+        record = {
+            "seq": seq,
+            "prev_hash": prev,
+            "event": payload,
+            "hash": compute_hash(seq, prev, payload),
+        }
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "ab") as fh:
+            fh.write(canonical_json(record) + b"\n")
+            fh.flush()
+            os.fsync(fh.fileno())
         return record
 
     @contextmanager
