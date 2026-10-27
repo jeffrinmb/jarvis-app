@@ -22,7 +22,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | 10 | Memory as an LLM-wiki on Markdown, Obsidian optional | Charter 7.1 | P3.1, P3.1a, P3.2, P3.3, P3.3a, P3.4, P3.10 | Planned |
 | 11 | Graph memory and cheap retrieval | Charter 7.2 | P3.7, P3.8, P3.9 | Planned |
 | 12 | Reusable on greenfield and brownfield projects | Charter 5.8, 6 | P0.4, P5.0, P5.1, P5.2, P5.3, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10, P7.8 | Planned |
-| 13 | Multiple harnesses and models | Charter 8.12 | P2.6, P2.6a, P2.6c, P4.7, P7.3, P7.4, P7.14 | Partly built: the hook interface is documented in ADR 0003 |
+| 13 | Multiple harnesses and models | Charter 8.12 | P2.6, P2.6a, P2.6c, P2.6d, P4.7, P7.3, P7.4, P7.14 | Partly built: the Claude Code hook exists, ADR 0003 |
 | 14 | Governed tool and MCP access | Charter 8.3 | P4.4, P4.5, P4.5a, P4.6 | Planned |
 | 15 | Prompt-injection resistance | Charter 8.5 | P2.5, P2.6b, P4.4b, P4.12, P4.12a, P6.4 | Partly built: taint and the trifecta rule |
 | 16 | Software supply chain | Charter 8.6 | P1.5, P1.5a, P1.5b, P4.11, P4.11a, P7.12a | Partly built: pinned actions, lockfile, secret scan |
@@ -61,7 +61,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 | G4: ledger events are unsigned (ASI07, RT-12) | P2.9b | Planned |
 | G5: no kill switch or anomaly detection (ASI08, ASI10, RT-14) | P2.8, P2.8a | Planned |
 | T-1: ledger truncation or rewrite | P2.1a, P2.1b | Partly built: anchors exist, automation planned |
-| T-3: the action is not the real tool call (RT-03) | P2.6, P2.6a, P2.6b | Planned |
+| T-3: the action is not the real tool call (RT-03) | P2.6, P2.6a, P2.6b | Partly built: tested with realistic payloads |
 | T-11: the hook is removed, disabled or bypassed (RT-18 to RT-20) | P2.6, P2.6c, P4.2, P4.15 | Planned |
 | T-4: the gate is unavailable, or recovery skips the audit | P6.8a | Planned |
 | T-5: secrets or personal data in the repo or the ledger | P1.5, P1.5b, P2.12 | Partly built: secret scan in CI |

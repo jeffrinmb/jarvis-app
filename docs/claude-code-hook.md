@@ -1,0 +1,84 @@
+# Claude Code hook
+
+`agentctl hook` connects Claude Code to the [policy gate](adr/0002-policy-evaluation-and-fail-closed-rules.md). Before each tool call it asks the gate whether the call is allowed, and it records what it decided in the audit ledger. The design and the facts about Claude Code's hook interface are in [ADR 0003](adr/0003-claude-code-hook-interface.md).
+
+**Status.** Built and tested with realistic payloads, but not yet run inside a live Claude Code session (task P2.6c). Start in log-only mode and read what it records before you trust it.
+
+## What it does
+
+| Event | What the hook does |
+|---|---|
+| `PreToolUse` | Builds an action from the **real tool call** (tool, arguments, paths, edit size), asks the gate, records the decision, and in enforce mode turns it into a Claude Code decision |
+| `PostToolUse`, `PostToolUseFailure` | Records that the call ran or failed, and updates what the session has been exposed to |
+| `SessionStart` | Starts a fresh session record (a resumed session keeps its exposure) |
+| `ConfigChange` | Records edits to Claude Code settings, and in enforce mode blocks them so the hook cannot be removed mid-session |
+
+## Modes
+
+- **`log-only` (default).** Records every decision and **never blocks**. It always exits 0 and prints no decision, so a problem in the hook cannot stop your work. Use this first, to see how often the gate would have intervened.
+- **`enforce`.** Blocks according to the gate, and fails closed. Needs Claude Code **2.1.295 or later**, because older versions let a crashed, timed-out or missing hook through. Check with `agentctl hook doctor --mode enforce`.
+
+In enforce mode the gate's answer becomes:
+
+| Gate says | Claude Code gets |
+|---|---|
+| allow | Nothing. Claude Code's own permission rules and prompts still apply. The hook never says "allow", because that would skip prompts the gate knows nothing about |
+| council or human | `ask` (a person answers in the terminal), or `deny` when `non_interactive: true` is set. This is temporary until the approval flow exists (P2.7) |
+| deny | `deny`, with the reason |
+
+A gate `deny` holds in every Claude Code permission mode, including `bypassPermissions`. The hook never rewrites a tool's input.
+
+## Set it up
+
+1. **Install the command** so `agentctl` is on the `PATH` that Claude Code uses (for example `uv tool install .` from this repository), or use `--runner uv` below.
+2. **Copy the starting files** into the project you want to watch:
+   - `examples/claude-code/policy.yaml` to `.agents/policy.yaml`
+   - `examples/claude-code/tool-registry.yaml` to `.agents/tool-registry.yaml`
+   - optionally `examples/claude-code/claude-code.yaml` to `.agents/claude-code.yaml`
+3. **Check the machine:**
+
+   ```bash
+   agentctl hook doctor
+   ```
+
+4. **Print the hooks block** and paste it into `.claude/settings.local.json` (or `~/.claude/settings.json`). The command does not edit any file, because changing hook configuration is itself a security-relevant act:
+
+   ```bash
+   agentctl hook snippet
+   ```
+
+   Use `--runner uv` to run through `uv run --project`, and `--mode enforce` once you are ready.
+5. **Start a Claude Code session in the project**, work normally, then check the ledger:
+
+   ```bash
+   agentctl verify --ledger .agents/ledger/events.jsonl
+   ```
+
+## What is recorded
+
+Every decision records: the tool and its registry id, the project-relative paths, the verdict and the rule ids that produced it, the session id, the permission mode, the tool-use id, whether the session was tainted, and a SHA-256 of the policy, registry and project files in force. The ledger is hash-chained, so edits to it are detected.
+
+**Never recorded:** file contents, command text, tool output or error text. Secret redaction proper arrives with P2.12, so for now the hook simply keeps that material out.
+
+## How a call is classified
+
+- **Tools.** `Read`, `Glob`, `Grep` map to `fs.read`; `Write`, `Edit`, `MultiEdit`, `NotebookEdit` to `fs.write`; `WebFetch`, `WebSearch` to `web.fetch`; `Agent` to `agent.spawn`. Any other tool, and any MCP tool that is not in your registry, is **denied**. MCP trust is judged by the tool you register, never by its name.
+- **Shell.** A command is a read (`shell.read`) or a test run (`shell.test`) only if it is a single plain command that starts with an allowed prefix, such as `git status` or `uv run pytest`. Anything with chaining, pipes, redirects, substitution or unusual arguments is a general shell call (`shell.run`), which needs a human. The `description` field the agent writes is ignored.
+- **Paths.** Absolute paths inside the project become relative. A path outside the project, or one that climbs out with `..`, stays absolute and goes to a human.
+- **Edit size.** Counted from the real arguments as an upper bound. Unknown sizes (for example a shell command) never help a call get approved.
+- **Exposure.** A session becomes *tainted* when a call that brings in untrusted content is **requested** (web fetches and searches, MCP tools, reads under third-party paths, shell commands that look like they fetch from the network), and it is marked as having seen *restricted data* when it reads a secret-looking file. This is applied at request time, not when the result arrives, so a lost `PostToolUse` cannot hide it. The gate then tightens: for example, edits after reading untrusted content need a human, and untrusted content plus restricted data plus an outbound call is the lethal trifecta.
+
+## Limits to know about
+
+- The hook only knows what each call and its own state tell it. A shell command is opaque, so keep `shell.run` behind a human. Real containment needs the sandbox (P4.2).
+- Session state lives in a user-level directory outside the project, but it is an ordinary file. An agent with shell access could in principle edit it. The gate treats the framework's own files as human-gated paths in the example policy, and the sandbox will close this properly.
+- In `enforce` mode, **blocking `ConfigChange`** also stops you changing your own Claude Code settings during a session. Turn it off with `block_config_changes: false` if that gets in the way.
+- Parallel tool calls in one turn may run their hooks at the same time, so exposure from one call may not yet be visible to another in the same batch.
+- Each tool call starts a Python process. Latency has not been measured (P2.6c); if it is too slow the plan is an `http` hook to a local service (P4.1a).
+- Unattended `claude -p` runs trust the folder, so a repository's own `.claude/settings.json` hooks run without a prompt. Review `.claude/` before running unattended on a repository you did not write.
+
+## Configuration
+
+`.agents/claude-code.yaml` (see `examples/claude-code/claude-code.yaml`). Everything has a safe default: the mode, the role the session acts in, the environment (never production), who is accountable (`on_behalf_of`, then `$JARVIS_ON_BEHALF_OF`, then the OS user), which paths are untrusted or sensitive, which vetted tools' output you trust, and the shell prefixes treated as read or test.
+
+Environment variables: `JARVIS_HOOK_MODE`, `JARVIS_ON_BEHALF_OF`, `JARVIS_TASK_ID` (cumulative limits are per task; the default is one task per Claude Code session), `JARVIS_STATE_DIR`, and `CLAUDE_PROJECT_DIR` (set by Claude Code).

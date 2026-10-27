@@ -2,7 +2,7 @@
 
 A governed, agentic framework for automating the software development lifecycle. AI agents do the work; humans decide only the major decisions; every action is auditable; token spend is budgeted; and the system learns from its mistakes.
 
-> **Status: early build (phase 2 in progress).** The charter, diagrams and roadmap exist, and the project skeleton, versioned schemas, a tamper-evident audit ledger (`agentctl log`, `verify`, `head`) and the policy gate (`agentctl check`) are built and tested. The Claude Code hook, approvals, memory and the rest are not built yet. "jarvis-app" is the repository's working name.
+> **Status: early build (phase 2 in progress).** The charter, diagrams and roadmap exist, and the project skeleton, versioned schemas, a tamper-evident audit ledger (`agentctl log`, `verify`, `head`), the policy gate (`agentctl check`) and a Claude Code hook (`agentctl hook`, log-only by default, not yet run in a live session) are built and tested. Approvals, identity, memory and the rest are not built yet. "jarvis-app" is the repository's working name.
 
 ## What it is
 
@@ -67,6 +67,7 @@ More diagrams (decision routing, pipeline and gates, memory, learning loop, inje
 | [Framework charter](docs/framework-charter.md) | Principles, architecture, autonomy tiers, practices for each SDLC phase, cross-cutting controls, roadmap, risks, open decisions, and the verification status of every external claim |
 | [Architecture diagrams](docs/architecture.md) | Mermaid diagrams for the system, decision flow, pipeline, memory, learning loop, tool access and roadmap |
 | [TODO list](docs/TODO.md) | Phase-by-phase, task-by-task plan with exit checks and a suggested first two weeks |
+| [Claude Code hook](docs/claude-code-hook.md) | How `agentctl hook` connects Claude Code to the policy gate: setup, modes, what is recorded, and its limits |
 | [Traceability](docs/traceability.md) | Every requirement mapped to the tasks that deliver it, so nothing we decided to build is untracked |
 | [Threat model](docs/threat-model.md) | The ten OWASP agentic risks mapped to controls, gaps and red-team cases, plus threats specific to this framework |
 | [Schema changelog](docs/schema-changelog.md) | Versioning policy for the schemas, how to change one, and the change history |
@@ -140,6 +141,16 @@ uv run agentctl check --action examples/action.json --policy examples/policy.yam
 ```
 
 Add `--no-log` for a dry run that reads history for cumulative limits but records nothing. The rules are described in [ADR 0002](docs/adr/0002-policy-evaluation-and-fail-closed-rules.md).
+
+Watch a Claude Code session with the policy gate. The hook starts in log-only mode: it records what the gate would decide and never blocks. Nothing is edited for you, so print the settings and paste them in yourself (see [docs/claude-code-hook.md](docs/claude-code-hook.md)):
+
+```bash
+uv run agentctl hook doctor
+```
+
+```bash
+uv run agentctl hook snippet
+```
 
 A ledger file cannot reveal that its tail was cut off or that the whole chain was rewritten consistently. Record an anchor (`agentctl head`) elsewhere and pass it to `verify --anchor` to detect both.
 

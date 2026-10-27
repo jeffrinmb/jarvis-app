@@ -61,7 +61,7 @@ These are the design decisions for P2.6, to be confirmed by the experiments in P
 5. **Build the `Action` from the real call.** `tool_name` maps to a registry tool id through an explicit table, and anything unmapped is an unregistered tool (denied). Paths come from `tool_input.file_path`. `diff_lines` is computed from `Write` content or `Edit` strings; where it cannot be known it is `null`, which the gate already treats as unbounded. `Bash` can touch any path, so it maps to a generic shell tool that is never auto-approved. The role, agent id and `on_behalf_of` come from configuration and the hook input, never from the agent's text.
 6. **Session state outside the workspace.** Taint and data-class exposure are kept per `session_id` and updated in `PostToolUse`: `WebFetch` and `WebSearch` output is untrusted; MCP output is untrusted unless the tool is registered otherwise, and trust is judged by `mcp_server.source`, never by the tool name; reads under configured untrusted paths are untrusted; `Bash` output is untrusted when the command uses network tools (a heuristic). The state directory is a no-go path for the gate. This is only as strong as filesystem permissions until the sandbox work (P4.2).
 7. **Protect the hook itself.** `.claude/settings*.json`, the hook scripts and the state directory are no-go paths in the gate. A `ConfigChange` hook blocks changes to hook configuration in user, project and local settings and records them. Organisations should use managed settings, which cannot be blocked or disabled from below.
-8. **Record the evidence.** Every decision event also records `permission_mode` (so a session running in `bypassPermissions` is visible), the Claude Code version, `session_id`, `tool_use_id`, `agent_id` and the `transcript_path`.
+8. **Record the evidence.** Every decision event also records `permission_mode` (so a session running in `bypassPermissions` is visible), `session_id`, `tool_use_id`, `agent_id`, the `transcript_path` and a SHA-256 of the policy files in force. The hook input does not carry the Claude Code version, so the version is checked by `agentctl hook doctor` instead of being recorded per event.
 9. **Performance.** Use exec form so there is no shell, and measure start-up cost per tool call. If it is too slow, move to an `http` hook talking to the orchestrator service (P4.1a).
 10. **Headless sessions and unreviewed repositories.** Because `-p` trusts the folder, review `.claude/` in any brownfield repository before running Claude Code unattended on it (links to P4.15 and P5).
 
@@ -79,3 +79,14 @@ These are the design decisions for P2.6, to be confirmed by the experiments in P
 - **An `http` hook to a local service first.** Better latency and a place for durable state, but it needs the orchestrator service (P4.1a) before we can start.
 - **The Agent SDK `canUseTool` callback.** More control, but it only covers SDK-driven runs and would be a second integration. A candidate for P7.3.
 - **A sandbox only.** Necessary for containment (P4.2) but cannot see intent, so it complements and does not replace the gate.
+
+## Implementation notes (P2.6)
+
+The hook was built on 2026-10-27 as [docs/claude-code-hook.md](../claude-code-hook.md) describes. Where it differs from or adds to the decisions above:
+
+- **Exposure is applied when a call is requested**, not only when `PostToolUse` arrives (decision 6 said "updated in PostToolUse"). A lost or failed post event therefore cannot hide an exposure. A call that the gate then blocks still counts, which is the conservative side. `PostToolUse` repeats the update, which is harmless because state only grows.
+- **Shell commands** are classified by exact token prefixes plus a ban on shell metacharacters and a few dangerous flags, so `git status; curl ...` is a general shell call.
+- **Missing or corrupt session state** is read as "everything was seen", so damage makes the gate stricter.
+- **Hashes of the policy, registry and project files** are recorded with every decision, which is part of P2.4b; loading them from a location the agent cannot write is not done.
+- **Verified only with synthetic payloads.** Nothing here has run inside a live Claude Code session. The open questions above are still open and are tracked as P2.6c; P2.6d runs the hook on this repository in log-only mode.
+- **`ask` for council and human** is a stopgap. Whether `ask` works in an unattended `-p` run is unconfirmed, so `non_interactive: true` makes the hook `deny` instead.

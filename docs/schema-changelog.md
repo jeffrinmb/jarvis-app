@@ -52,7 +52,7 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 
 ### Unreleased
 
-No changes yet.
+No schema changes. One data convention was added without changing any schema: `policy_decision` events now carry an optional `data.context` object with caller context (harness, mode, session id, permission mode, tool-use id, SHA-256 of the policy files). `data` is free-form, so the `event` schema is unchanged.
 
 ### 2026-10-27: policy gate (PR #5, commit 8bb0270)
 
