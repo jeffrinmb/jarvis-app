@@ -35,6 +35,27 @@ jobs:
       - name: Tests
         run: uv run pytest
 
+  # Single required check for branch protection. It passes only if every matrix job
+  # passed, so the ruleset never needs editing when the matrix changes. `always()`
+  # makes it run (and fail) even when a test job failed; a skipped required check
+  # could otherwise be treated as passing. If more jobs or workflows are added,
+  # add them to `needs`.
+  ci-ok:
+    name: ci-ok
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless all required jobs succeeded
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          echo "test: $TEST_RESULT"
+          if [ "$TEST_RESULT" != "success" ]; then
+            echo "A required job did not succeed."
+            exit 1
+          fi
+
 # TODO (see docs/TODO.md P1.5): add secret scanning and a dependency allowlist
 # check, and pin the actions above to commit SHAs (checkout v7.0.1, setup-python v7.1.0
 # were the latest releases and run on Node 24 when this was written).
