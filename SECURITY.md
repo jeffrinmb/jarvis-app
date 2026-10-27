@@ -33,7 +33,7 @@ Beyond the usual (code execution, secret exposure, unsafe file handling), these 
 - **privilege or credential issues** in the tool gateway, MCP handling or identity design;
 - schemas or defaults that are **unsafe by default** (for example, something that fails open).
 
-Known gaps are listed in the [charter](docs/framework-charter.md) (section 16) and the [TODO list](docs/TODO.md). A report about something already listed there is still welcome, but may already be tracked.
+Known gaps are listed in the [threat model](docs/threat-model.md), the [charter](docs/framework-charter.md) (section 16) and the [TODO list](docs/TODO.md). A report about something already listed there is still welcome, but may already be tracked.
 
 ## What to expect
 

@@ -44,7 +44,7 @@ Goal: stable contracts before any component is built.
 - [x] **P1.4** Schema versioning policy and changelog: [docs/schema-changelog.md](schema-changelog.md); tests fail if a schema is missing from it or the version table is wrong (PL)
 - [ ] **P1.5** CI on every change: lint, unit tests, schema checks, secret scan, dependency allowlist check. _Lint, format check, tests and the schema drift test run on Linux and Windows; secret scan, dependency allowlist check and action SHA pinning are still to do._ (PL)
 - [ ] **P1.6** ADR template and the first ADRs (storage, schema versioning, trace conventions). _Template and ADR 0001 done; schema versioning and trace conventions ADRs still to do._ (FO)
-- [ ] **P1.7** Map the OWASP agentic risks (ASI01 to ASI10) to controls and red-team cases as a threat-model document (PS)
+- [x] **P1.7** Map the OWASP agentic risks (ASI01 to ASI10) to controls and red-team cases as a threat-model document: [docs/threat-model.md](threat-model.md), with 17 red-team cases and a test that checks every cited test exists (PS)
 
 Exit check: schemas validate, CI is green, threat model reviewed.
 
@@ -60,11 +60,12 @@ Goal: every action is logged, risky actions are stopped, humans can approve with
 - [ ] **P2.3** OpenTelemetry GenAI export: pinned convention version, shared trace ID with the audit log, content capture opt-in and by reference (PL)
 - [x] **P2.4** Policy engine and `agentctl check` returning allow, council, human or deny with a reason; risk comes from the registry, never from the action; fail closed; decisions logged to the ledger; thresholds aggregated per task. Rules and exit codes are in ADR 0002 (PS)
 - [ ] **P2.4a** Follow-ups: per-day aggregation, an index so checks do not scan the whole ledger, and path-derived risk (PS, PL)
+- [ ] **P2.4b** Policy integrity (threat model gap G2): record a SHA-256 of the policy, registry and project files in every decision event, and have the hook load them from a location the agent cannot write (PS)
 - [x] **P2.5** Trust labels, taint tracking and the lethal-trifecta check in the gate. _The gate takes session state as input; the Claude Code hook (P2.6) must supply it truthfully._ (PS)
 - [ ] **P2.6** Claude Code hooks that emit events and call `agentctl check` before risky tools, in **log-only mode** first (PL)
 - [ ] **P2.7** Approval flow: decision cards, park and resume, attributed approvals, four-eyes for no-go zones, timeouts that never auto-approve (PL, PS)
 - [ ] **P2.8** Budgets per task, stage and day; loop breaker; kill switch (PL)
-- [ ] **P2.9** Agent identities and "on behalf of" fields; credential broker stub with short-lived, task-scoped credentials (PS)
+- [ ] **P2.9** Agent identities and "on behalf of" fields; credential broker stub with short-lived, task-scoped credentials. Must also authenticate `role` and `agent_id` (threat model gap G1) and sign ledger events so forged appends are detectable (gap G4) (PS)
 - [ ] **P2.10** Review the log-only data (how often would the gate have blocked, how many overrides), tune thresholds, then switch to enforcing (PS, FO)
 - [ ] **P2.11** Start the small red-team suite and the eval skeleton (formalised in phase 6) (PS, ME)
 
