@@ -2,7 +2,7 @@
 
 A governed, agentic framework for automating the software development lifecycle. AI agents do the work; humans decide only the major decisions; every action is auditable; token spend is budgeted; and the system learns from its mistakes.
 
-> **Status: early build (phases 1 and 2 started).** The charter, diagrams and roadmap exist, and the project skeleton, versioned schemas and a tamper-evident audit ledger (`agentctl log`, `verify`, `head`) are built and tested. The policy gate, approvals, memory and the rest are not built yet. "jarvis-app" is the repository's working name.
+> **Status: early build (phase 2 in progress).** The charter, diagrams and roadmap exist, and the project skeleton, versioned schemas, a tamper-evident audit ledger (`agentctl log`, `verify`, `head`) and the policy gate (`agentctl check`) are built and tested. The Claude Code hook, approvals, memory and the rest are not built yet. "jarvis-app" is the repository's working name.
 
 ## What it is
 
@@ -129,6 +129,14 @@ uv run agentctl verify
 uv run agentctl head        # prints SEQ:HASH; keep it somewhere safe, such as Git
 uv run agentctl verify --anchor SEQ:HASH
 ```
+
+Ask the policy gate about an action. It prints a verdict as JSON and exits 0 for allow, 10 for council, 11 for human or 12 for deny (2 for invalid input). **Treat every non-zero exit as "not allowed".** Every decision is recorded in the ledger first; if the ledger cannot be written, the answer is deny.
+
+```bash
+uv run agentctl check --action examples/action.json --policy examples/policy.yaml --registry examples/tool-registry.yaml
+```
+
+Add `--no-log` for a dry run that reads history for cumulative limits but records nothing. The rules are described in [ADR 0002](docs/adr/0002-policy-evaluation-and-fail-closed-rules.md).
 
 A ledger file cannot reveal that its tail was cut off or that the whole chain was rewritten consistently. Record an anchor (`agentctl head`) elsewhere and pass it to `verify --anchor` to detect both.
 
