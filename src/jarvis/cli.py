@@ -1,6 +1,11 @@
-"""`agentctl`: command line for the ledger and schemas.
+"""`agentctl`: command line for the policy gate, the ledger and schemas.
 
-Exit codes: 0 success, 1 verification failed or ledger problem, 2 bad input.
+Exit codes for ``log``, ``verify``, ``head`` and ``schema``: 0 success, 1 verification failed
+or ledger problem, 2 bad input.
+
+Exit codes for ``check`` (the policy gate): 0 allow, 10 council, 11 human, 12 deny, and 2 for
+invalid input. **Callers must treat every code other than 0 as "not allowed".** An internal
+error also exits 12, so the gate fails closed.
 """
 
 from __future__ import annotations
@@ -11,20 +16,36 @@ import os
 import sys
 from pathlib import Path
 
+import yaml
 from pydantic import ValidationError
 
 from jarvis.core.ledger import Ledger, LedgerError
+from jarvis.core.policy import run_check
 from jarvis.core.schemas import (
+    Action,
     Decision,
     Event,
     EventKind,
+    Policy,
+    ProjectConfig,
     RiskClass,
     TrustLabel,
     export_json_schemas,
+    load_tool_registry,
+    load_yaml_model,
 )
 from jarvis.core.schemas.event import ModelRef, ToolRef, Usage
 
 DEFAULT_LEDGER = ".agents/ledger/events.jsonl"
+DEFAULT_POLICY = ".agents/policy.yaml"
+DEFAULT_REGISTRY = ".agents/tool-registry.yaml"
+
+CHECK_EXIT_CODES = {
+    Decision.ALLOW: 0,
+    Decision.COUNCIL: 10,
+    Decision.HUMAN: 11,
+    Decision.DENY: 12,
+}
 
 
 def _ledger_path(arg: str | None) -> Path:
@@ -75,6 +96,23 @@ def _build_parser() -> argparse.ArgumentParser:
     head = sub.add_parser("head", help="print SEQ:HASH of the last record, for anchoring")
     head.add_argument("--ledger")
 
+    check = sub.add_parser(
+        "check",
+        help="ask the policy gate about an action (exit 0 allow, 10 council, 11 human, 12 deny)",
+    )
+    check.add_argument("--action", required=True, help="action JSON or YAML file, or - for stdin")
+    check.add_argument("--policy", default=DEFAULT_POLICY, help=f"default: {DEFAULT_POLICY}")
+    check.add_argument(
+        "--registry", default=DEFAULT_REGISTRY, help=f"tool registry, default: {DEFAULT_REGISTRY}"
+    )
+    check.add_argument("--project", help="project.yaml with enabled tools and no-go paths")
+    check.add_argument("--ledger", help=f"default: $JARVIS_LEDGER or {DEFAULT_LEDGER}")
+    check.add_argument(
+        "--no-log",
+        action="store_true",
+        help="dry run: read history for cumulative limits but do not record the decision",
+    )
+
     schema = sub.add_parser("schema", help="schema tools")
     schema_sub = schema.add_subparsers(dest="schema_command", required=True)
     export = schema_sub.add_parser("export", help="write JSON Schema files")
@@ -124,6 +162,32 @@ def _build_event(args: argparse.Namespace) -> Event:
     return Event(**{k: v for k, v in fields.items() if v is not None})
 
 
+def _load_action(source: str) -> Action:
+    text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+    return Action.model_validate(yaml.safe_load(text))  # YAML is a superset of JSON
+
+
+def _check_command(args: argparse.Namespace, ledger: Ledger) -> int:
+    try:
+        action = _load_action(args.action)
+        policy = load_yaml_model(args.policy, Policy)
+        registry = load_tool_registry(args.registry)
+        project = load_yaml_model(args.project, ProjectConfig) if args.project else None
+    except (ValidationError, ValueError, OSError, yaml.YAMLError) as exc:
+        print(f"invalid input: {exc}", file=sys.stderr)
+        return 2
+    use_ledger = ledger if not (args.no_log and not ledger.path.exists()) else None
+    try:
+        verdict = run_check(
+            action, policy, registry, project, ledger=use_ledger, record=not args.no_log
+        )
+    except Exception as exc:  # the gate must fail closed on any unexpected error
+        print(f"internal error, denying: {exc!r}", file=sys.stderr)
+        return CHECK_EXIT_CODES[Decision.DENY]
+    print(verdict.model_dump_json(indent=2))
+    return CHECK_EXIT_CODES[verdict.decision]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
@@ -133,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     ledger = Ledger(_ledger_path(args.ledger))
+
+    if args.command == "check":
+        return _check_command(args, ledger)
 
     if args.command == "log":
         try:

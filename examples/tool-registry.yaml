@@ -8,6 +8,16 @@
   environments: [dev, staging]
   approval: auto
   owner: platform-team
+- id: fs.write
+  source: native
+  version: "1"
+  risk: low
+  effect: write-reversible
+  data_class: internal
+  allowed_roles: [builder]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
 - id: github.create_pr
   source: mcp:github
   version: 1.4.2
@@ -17,6 +27,16 @@
   allowed_roles: [builder, reviewer]
   environments: [dev, staging]
   approval: auto
+  owner: platform-team
+- id: web.post
+  source: native
+  version: "1"
+  risk: high
+  effect: external-comms
+  data_class: confidential
+  allowed_roles: [builder]
+  environments: [dev]
+  approval: council
   owner: platform-team
 - id: deploy.production
   source: native

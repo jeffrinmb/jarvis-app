@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "DataClass": {
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ],
+      "title": "DataClass",
+      "type": "string"
+    },
+    "Environment": {
+      "enum": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "title": "Environment",
+      "type": "string"
+    },
+    "SessionState": {
+      "additionalProperties": false,
+      "description": "What the session has already been exposed to.",
+      "properties": {
+        "data_classes_seen": {
+          "items": {
+            "$ref": "#/$defs/DataClass"
+          },
+          "title": "Data Classes Seen",
+          "type": "array"
+        },
+        "trust_labels_seen": {
+          "items": {
+            "$ref": "#/$defs/TrustLabel"
+          },
+          "title": "Trust Labels Seen",
+          "type": "array"
+        }
+      },
+      "title": "SessionState",
+      "type": "object"
+    },
+    "TrustLabel": {
+      "enum": [
+        "trusted",
+        "internal",
+        "untrusted"
+      ],
+      "title": "TrustLabel",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "agent_id": {
+      "minLength": 1,
+      "title": "Agent Id",
+      "type": "string"
+    },
+    "diff_lines": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Lines this action changes. Unknown (null) is treated as unbounded for tools that are not read-only.",
+      "title": "Diff Lines"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "input_trust": {
+      "description": "Trust labels of the content that directly feeds this action",
+      "items": {
+        "$ref": "#/$defs/TrustLabel"
+      },
+      "title": "Input Trust",
+      "type": "array"
+    },
+    "on_behalf_of": {
+      "minLength": 1,
+      "title": "On Behalf Of",
+      "type": "string"
+    },
+    "paths": {
+      "description": "Paths the action touches",
+      "items": {
+        "type": "string"
+      },
+      "title": "Paths",
+      "type": "array"
+    },
+    "role": {
+      "description": "Role the agent is acting in",
+      "minLength": 1,
+      "title": "Role",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "session": {
+      "$ref": "#/$defs/SessionState"
+    },
+    "task_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task Id"
+    },
+    "tool_id": {
+      "minLength": 1,
+      "title": "Tool Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_id",
+    "on_behalf_of",
+    "role",
+    "tool_id",
+    "environment"
+  ],
+  "title": "Action",
+  "type": "object"
+}

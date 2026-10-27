@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "agent_id": "builder-1",
+  "on_behalf_of": "alice",
+  "role": "builder",
+  "task_id": "T-1",
+  "tool_id": "fs.write",
+  "environment": "dev",
+  "paths": ["docs/usage.md"],
+  "diff_lines": 12,
+  "input_trust": ["internal"],
+  "session": {
+    "trust_labels_seen": ["trusted", "internal"],
+    "data_classes_seen": ["internal"]
+  }
+}

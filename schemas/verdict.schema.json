@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "Decision": {
+      "description": "Outcome of a policy check.",
+      "enum": [
+        "allow",
+        "council",
+        "human",
+        "deny"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "RiskClass": {
+      "description": "Ordered from least to most risky; use ``rank`` to compare.",
+      "enum": [
+        "read",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskClass",
+      "type": "string"
+    },
+    "RuleMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "auto_approve",
+            "council_review",
+            "human_required",
+            "never",
+            "builtin",
+            "registry"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "effect": {
+          "$ref": "#/$defs/Decision"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "rule_id": {
+          "minLength": 1,
+          "title": "Rule Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "category",
+        "effect",
+        "reason"
+      ],
+      "title": "RuleMatch",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "$ref": "#/$defs/Decision"
+    },
+    "diff_size_known": {
+      "default": true,
+      "title": "Diff Size Known",
+      "type": "boolean"
+    },
+    "matches": {
+      "items": {
+        "$ref": "#/$defs/RuleMatch"
+      },
+      "title": "Matches",
+      "type": "array"
+    },
+    "policy_version": {
+      "minLength": 1,
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "reason": {
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "risk": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RiskClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Risk class taken from the registry"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "tainted": {
+      "default": false,
+      "title": "Tainted",
+      "type": "boolean"
+    },
+    "total_diff_lines": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Total Diff Lines",
+      "type": "integer"
+    },
+    "trifecta": {
+      "default": false,
+      "title": "Trifecta",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "decision",
+    "reason",
+    "policy_version"
+  ],
+  "title": "Verdict",
+  "type": "object"
+}

@@ -221,6 +221,42 @@ def test_policy_rejects_bad_rule_id():
         Policy(version="1", never=[{"id": "Bad Id", "description": "x"}])
 
 
+def test_auto_approve_rules_must_set_a_condition():
+    with pytest.raises(ValidationError, match="at least one condition"):
+        Policy(version="1", auto_approve=[{"id": "everything", "description": "x"}])
+    # the same empty condition is fine for restrictive rules: matching everything is safe there
+    Policy(version="1", human_required=[{"id": "everything", "description": "x"}])
+
+
+def test_impossible_conditions_are_rejected():
+    with pytest.raises(ValidationError):
+        Policy(
+            version="1",
+            never=[
+                {
+                    "id": "r",
+                    "description": "x",
+                    "when": {"risk_at_least": "high", "risk_at_most": "low"},
+                }
+            ],
+        )
+    with pytest.raises(ValidationError):
+        Policy(
+            version="1",
+            never=[
+                {
+                    "id": "r",
+                    "description": "x",
+                    "when": {"min_diff_lines": 50, "max_diff_lines": 10},
+                }
+            ],
+        )
+
+
+def test_action_and_verdict_schemas_are_exported():
+    assert {"action", "verdict"} <= set(SCHEMAS)
+
+
 # ---------- tool registry ----------
 
 
