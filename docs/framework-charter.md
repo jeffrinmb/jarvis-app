@@ -1,10 +1,12 @@
 # Agentic SDLC Framework: Charter
 
-Status: **Draft v0.1** · Date: 2026-10-27 · Owner: _to be named_ · Reviewers: _security, platform, engineering leads_
+Status: **Draft v0.2** · Date: 2026-10-27 · Owner: _to be named_ · Reviewers: _security, platform, engineering leads_
+
+Changes in v0.2: added the major-decisions-only flow with a sample policy (4.1), council patterns (4.2), expanded brownfield onboarding (5.8) and the learning loop (5.9), memlog and Obsidian notes (7.1), the visual layer (8.13), the alternatives landscape and BMAD compatibility (13.1-13.2), build operations (14), and configuration samples (15).
 
 This charter defines what the framework is, the rules it is built under, how AI is used in each SDLC phase, and what is built first. It is a reference to build against, not a specification of code.
 
-Evidence notes: most external guidance below comes from vendor and practitioner sources. Each practice is tagged **[P]** primary/standard source, **[S]** secondary or vendor source, or **[O]** our own design decision. Anything tagged **[S]** that becomes a hard requirement must be checked against its primary document first. See [Section 14](#14-evidence-and-verification-status).
+Evidence notes: most external guidance below comes from vendor and practitioner sources. Each practice is tagged **[P]** primary/standard source, **[S]** secondary or vendor source, or **[O]** our own design decision. Anything tagged **[S]** that becomes a hard requirement must be checked against its primary document first. See [Section 16](#16-evidence-and-verification-status).
 
 ---
 
@@ -101,6 +103,70 @@ adapters/   packs/{greenfield,brownfield,stacks}   viz/   docs/
 - Review is **risk-weighted**: low-risk changes get light review, high-risk get deep review. Reviewing everything equally causes rubber-stamping.
 - Approval fatigue is tracked as a metric (volume of cards, time-to-decision, override rate).
 
+### 4.1 Major decisions only: how routing to a human works
+
+The agent runs continuously. A **policy engine outside the model** decides what counts as major. The human is paged only when a decision crosses a line.
+
+```
+Agent decision
+   ├─ matches auto_approve ────────────────► proceed, log it
+   ├─ matches council_review ─► council ───► unanimous: proceed, log
+   │                                         split or block: escalate
+   └─ matches human_required ──────────────► park the task, send decision card
+```
+
+The policy is a versioned file enforced by a service, so the agent cannot talk its way past it. Starter example (thresholds are placeholders to tune from data):
+
+```yaml
+# .agents/policy.yaml
+auto_approve:
+  - tests, docs, lint fixes, refactors under 200 lines
+  - dependency patch bumps that pass CI and the allowlist
+  - any change confined to a task branch or worktree
+council_review:            # advisory; human only if the council splits
+  - new dependency, public API shape change, dev schema change
+human_required:            # the "major decisions"
+  - production deploy or rollback
+  - destructive data migration
+  - auth, secrets, IAM, payment logic
+  - architecture change that contradicts an ADR
+  - spend above budget
+  - ambiguity remaining after one clarification attempt
+  - three failed attempts on the same task
+never:
+  - disable tests or CI to get green
+  - touch .env, secrets paths or production credentials
+```
+
+**Rules and failure modes**
+- **Risk is computed from evidence** (touched paths, diff size, file types, tools used, taint state), never self-reported by the agent. **[O]**
+- **Aggregate, so changes cannot be split to slip under a threshold:** thresholds apply per task and per day, not per commit. **[O]**
+- **Precedents:** every human decision is stored. After the same decision type is approved repeatedly (start with three), the framework proposes a policy change; a human approves it through a normal policy PR. The agent never edits policy. **[O]**
+- **Start conservative:** in the first weeks escalate almost everything, log what the human decided, then move always-approved types into `auto_approve`. **[O]**
+- **Health targets:** humans see a small share of decisions and overturn few of them. Many overrides mean thresholds are too loose; near-universal approvals mean too tight.
+- **Cheap human step:** decision cards, a twice-daily digest for non-urgent items, push notification for urgent ones, an "ask me later" action, and a stated safe default (stay parked, never auto-approve).
+- **Autonomy beyond the gate:** once a task is approved, the agent proceeds without further prompts inside the approved scope; a deviation from the approved plan re-triggers the gate.
+
+### 4.2 Council
+
+A council is several agents or models deliberating on one decision. It costs several model calls, so it is used only at high-risk gates.
+
+| Pattern | How it works | Best for |
+|---|---|---|
+| **Role council** | Architect, Security, QA, Performance/Cost and Product each review the artifact from their own angle | Design and high-risk PR review |
+| **Model council** | Several models answer independently, then rank each other's answers anonymously, then a chair model synthesises. This is the pattern from Karpathy's `llm-council` project **[S]** | Hard design questions where model diversity helps |
+| **Debate** | One agent argues for and one against; a judge decides | Trade-off decisions |
+
+**Rules**
+- **The council advises; the human decides.** A council vote never replaces a merge or deploy approval.
+- Members return a structured vote: `approve | concerns | block`, confidence, at most 5 reasons. Quorum is configured per gate; a blocking Security vote escalates to a human.
+- **One round**, cheaper models for most members, a strong model only for the chair, one shared cached prefix for the artifact.
+- Anonymise answers before peer review so models do not favour their own family. Use different providers where possible for diversity, while remembering that models share biases: the council does not replace deterministic checks.
+- Every council run is logged (members, models, prompt versions, votes, outcome) in the audit log.
+- **The council must earn its place.** Evaluate whether council outcomes differ from, and beat, a single reviewer on the eval set; if not, retire it for that gate. **[O]**
+
+---
+
 ## 5. Practices by SDLC phase
 
 Each phase lists the AI role, default tier, controls, and metrics.
@@ -126,7 +192,7 @@ Each phase lists the AI role, default tier, controls, and metrics.
 - Record the **baseline revision** before changes. Tag AI-assisted commits with agent, model, task ID and approver (trailers). **[S]**/**[O]**
 - Dependencies: existence check, allowlist, provenance check, install scripts disabled in the sandbox, human approval for any dependency change (Section 8.6). **[S]**
 - Permission levels are separate: edit files, run tests, publish artifacts. **[S]**
-- Context is assembled under a hard token cap (Section 8.3).
+- Context is assembled under a hard token cap (Sections 7.3 and 8.2).
 - **Metrics:** first-pass CI success, tokens and cost per merged PR, PR size, rework rate.
 
 ### 5.4 Test and verification
@@ -160,7 +226,15 @@ Each phase lists the AI role, default tier, controls, and metrics.
 - **Metrics:** MTTR for assisted incidents, escalation accuracy, wrong-action rate.
 
 ### 5.8 Maintain, modernise and brownfield
-- **Discover first (deterministic):** code graph from imports and symbols, git history for hotspots and ownership, test and CI health, dependency age. Then cheap-model summaries go to the inbox as unverified; humans confirm the top modules. **[O]**
+- **Onboarding sequence for an existing repo** **[O]**, informed by the practices below:
+  1. **Map (deterministic, no model tokens):** code graph from imports, symbols, build files and dependencies.
+  2. **Profile:** git history for hotspots, churn and ownership; test coverage, CI health, dependency age.
+  3. **Infer:** cheap-model summaries per module go to the inbox as `agent-inferred`.
+  4. **Confirm:** humans review the 10-20 most critical modules; confirmed ones become trusted memory.
+  5. **Mark no-go zones:** fragile, undocumented or regulated areas get stricter policy (human required).
+  6. **Safety net:** characterization tests (below) around an area before any agent changes it.
+  7. **Baseline:** record cycle time, defect rate, build time and cost before agents start, so improvement can be shown.
+  8. **Start read-only:** brownfield tool sets begin read-only and widen as trust builds.
 - **Characterization tests before any change;** verify them by deliberately breaking the code (modules that stay green are not ready). **[S]**
 - **Strangler pattern** with small slices, one intent per slice, one PR per job, traffic shifts in stages, and legacy retired only after a stable cycle at full traffic. **[S]**
 - **Triage first.** Retire systems that carry debt but little value. AI cannot recover undocumented business rules or make architecture decisions: escalate those. **[S]**
@@ -169,7 +243,9 @@ Each phase lists the AI role, default tier, controls, and metrics.
 - **Metrics:** parity-test pass rate per slice, defects found in shadow traffic, slices completed per cycle.
 
 ### 5.9 Learn and improve
-- Outcome signals (CI, human decisions, rework, incidents, revert, cost) feed a reflection job (cheap model, batched).
+- **"Reinforcement learning" here means a feedback loop around the model, not weight updates.** Hosted models cannot be retrained by us; learning happens through memory, policy, tests and routing. It is cheaper, auditable and reversible. Fine-tuning or true RL is a later option only if outcome data volume justifies it. **[O]**
+- **Reward signals come from objective sources, not the agent's opinion:** CI and test results, human decisions at gates (approved, edited, rejected, overridden), review comments and post-merge rework, defects, incidents and reverts traced to a change, cost and token overrun, and council votes later proven right or wrong.
+- Outcome signals feed a reflection job (cheap model, batched): after a failure or override it writes a short post-mortem (what happened, root cause, what would have prevented it); after a hard success, what worked.
 - Lessons are **validated before storing**: specific and checkable, confirmed by a second occurrence, a human, or a replay test, and consistent with higher-trust rules.
 - **Order of preference for fixing a repeated mistake:** CI check or test, then hook or lint rule, then policy rule, then playbook, then wiki note, then prompt text. **[O]**
 - Production failures become regression tests, with an online check to catch recurrence. **[S]**
@@ -198,6 +274,10 @@ Memory types: working (context window), episodic (event log, summaries), semanti
 Vault layout: `00-inbox/` (agent writes only here), `10-decisions/`, `20-lessons/`, `30-components/`, `40-playbooks/`, `50-incidents/`, `60-prefs/`, `90-index/` (generated), `_policy/`.
 
 Rules: agents write only to the inbox; promotion needs validation; every note carries `status`, `trust` (agent-inferred < test-verified < human-confirmed), `confidence`, `supersedes`, provenance; supersede, don't silently delete; prune and deduplicate on a schedule; no secrets or PII; memory is data, never instructions. Obsidian is an optional viewer; `.obsidian/` is git-ignored.
+
+**Obsidian practicalities.** Nothing in the framework depends on Obsidian: agents work on the Markdown files directly, so it can be adopted later by opening the vault folder. Use `[[wikilinks]]`, YAML frontmatter, readable filenames, one idea per note with a one-line summary at the top, and keep generated files in `90-index/` so humans and agents never edit the same file. Install only core plugins plus Dataview or Bases if queries are needed; community plugins run with the user's file access, so review them. Keep secrets and PII out, turn cloud sync off (Git is the history), and check Obsidian's licence terms for company use before rollout. Agents write only to per-agent inbox files; one process merges them, which avoids edit clashes with a human who has the same vault open.
+
+**Episodic logs versus the wiki.** A per-epic run log (such as BMAD's `.memlog.md`, whose exact format has not been reviewed) is episodic memory: what happened, in order. It is a raw source for the ingest job, not a replacement for the wiki. Epic retrospectives are a natural ingest trigger: when one lands, the affected wiki pages are updated and the run log is left unchanged as the record. A small always-on project-context block (in `AGENTS.md`, stamped with the verified commit) stays as the cheap core.
 
 ### 7.2 Graph index
 Nodes: requirement, story, ADR, component, file/symbol, test, PR, incident, lesson, agent, approver. Edges: `implements`, `depends_on`, `decided_by`, `supersedes`, `caused_by`, `fixed_by`, `violates`, `tested_by`, `approved_by`, `learned_from`. Built deterministically from code and wikilinks where possible; derived index is rebuildable from the vault (vault is the source of truth). Retrieval is hybrid (vector candidates, then 1-2 graph hops, capped).
@@ -290,6 +370,19 @@ Nodes: requirement, story, ADR, component, file/symbol, test, PR, incident, less
 - Enforcement must not rely on a harness's hooks: also enforce through sandbox permissions, scoped credentials, branch protection and CI, since some harnesses cannot block actions.
 - Harnesses run in non-interactive mode under the orchestrator for unattended work. Never run unattended with confirmations disabled.
 
+### 8.13 Visual layer: 2D timeline and 3D world **[O]**
+
+**Principle:** the visual layer is **observability, not control**, and it is driven by real events from the ledger and traces, never simulated. Boundaries are enforced by permissions, policy and CI, not by anything in the scene.
+
+- **Order of build:** 2D timeline and list view first (it is what audits and screen readers need), 3D world later. Both read the same event stream; the 3D client is one more client of the orchestrator.
+- **Scene mapping:** districts per SDLC stage; one avatar per agent with animation per state (reading, editing, testing, thinking, blocked, waiting on human) taken from events; a council chamber where votes appear and a blocking vote turns red; the **human gate as a door** where queued tasks visibly wait; artifacts (spec, PR, test report) moving between districts; a token-budget ring per agent and stage that changes colour near the limit; alerts for loops, budget overruns and anomalous tool use.
+- **Actions from the scene** (approve, reject, pause) call the **same gate API with the same authorization** as the CLI. There is no separate path.
+- **Privacy:** show identifiers and states, not prompts or code; redaction applies as in the audit log.
+- **Cost:** the visual layer adds no model tokens; send small events, not transcripts.
+- Prior art (for example, simulation research such as Stanford's "Generative Agents" and open-source agent dashboards) is inspiration only; review current projects before building.
+
+---
+
 ## 9. Roles and accountability (starting RACI)
 
 | Activity | Responsible | Accountable | Consulted | Informed |
@@ -348,13 +441,101 @@ Do not start with the council, router or 3D world: they depend on the ledger and
 8. Compliance scope and applicable regulatory dates (compliance owner).
 9. Licence check for any reused upstream text or code (BMAD licence unconfirmed).
 10. Data policy: which models may see which repos.
+11. Which content pack(s) to ship first (BMAD-style, Spec Kit, OpenSpec) and whether importers are needed on day one.
+12. Whether the visual layer is a 2D timeline only for the pilot, with 3D deferred.
 
 ## 13. Reference designs reviewed
 
 - **BMAD-METHOD** (methodology; skills and a Python state layer). Read: README, `AGENTS.md`, selected skills (`bmad-project-context`, `bmad-eval`, `bmad-party-mode`, `bmad-build-auto`, `bmad-code-review` entry), `tools/ticket-tree-rules.md`. Not read: persona definitions, code-review reviewer layers, build workflow steps, `docs/existing-codebases/`. v7 is alpha.
 - **nebula** (Rust TUI/daemon supervising agent CLIs; MIT; work in progress). Read: README, `ARCHITECTURE.md`, `docs/how-it-works.md`, `docs/orchestrator.md`, `docs/configuration.md`. No memory, routing, policy engine, MCP, or injection defences in what was read.
 
-## 14. Evidence and verification status
+### 13.1 Landscape of alternatives and how we relate to them
+
+We build a governance and memory layer, and we compose with, not replace, spec and agent tooling. Status notes come from secondary sources found in October 2026; verify each project before depending on it.
+
+| Tool | What it is | Relation to this framework |
+|---|---|---|
+| **GitHub Spec Kit** | Open-source (MIT) spec-first toolkit: constitution, specify, plan, tasks, implement; works across many coding agents. Official history reports v1.0.0 on 2026-08-21 **[S]** | Candidate **content pack** for the spec phase; light, harness-neutral. No policy, memory or audit layer |
+| **Kiro (AWS)** | Spec-driven IDE: requirements (EARS-style) → design → tasks, steering files in `.kiro/steering/`, event-driven hooks **[S]** | A product, not a portable method; a source of ideas (steering, hooks). Adopt concepts only |
+| **OpenSpec** | Specs in `openspec/specs/`, per-change folders in `openspec/changes/` with proposal, requirement deltas and tasks, archived on completion; brownfield focus; MIT **[S]** | Strong fit for **change-by-change brownfield** work; its "change proposal and archive" idea maps onto our task and ADR records |
+| **Tessl** | Spec-as-source-of-truth approach (reported as more experimental) **[S]** | Watch only |
+| **MetaGPT / ChatDev** | Simulated software-company multi-agent frameworks | Useful for prototypes; weak on human gates, audit and brownfield; heavier on tokens |
+| **CrewAI, AutoGen, LangGraph, OpenAI Agents SDK** | General agent orchestration libraries | Possible runtime for our orchestrator; LangGraph-style interrupt and checkpoint fits park-and-resume (8.9) |
+| **Claude Code subagents, skills, hooks, plugins** | Native roles, commands, hooks and headless mode | First harness and adapter target |
+| **Autonomous agents (Devin, OpenHands, Copilot coding agent, Jules)** | Ticket in, PR out | Tier-2 workers behind our gate; control comes from our PR and CI gates **(from general knowledge; not re-verified)** |
+
+**Choosing a content pack per project:** full lifecycle with personas (BMAD-style); lightest spec loop (Spec Kit); existing codebase, change by change (OpenSpec); an IDE-integrated workflow (Kiro). The framework's core stays the same; the pack is replaceable.
+
+### 13.2 Compatibility without dependence
+
+- **Importers, not imports:** a one-time importer converts existing BMAD (or Spec Kit, OpenSpec) artifacts, such as briefs, PRDs and architecture documents, into our spec and vault formats.
+- **Exporter:** a thin export keeps an `AGENTS.md` project-context block current so any harness still gets always-on context.
+- **Own versioned schemas** for task, decision, lesson, event and policy, documented and tested. Upstream format changes (BMAD v7 is alpha) cannot break us.
+- **Attribution and licence:** note the source of any closely reused idea; confirm licences before copying text or code.
+
+---
+
+## 14. Running the build
+
+- **Team:** two to three engineers can build the spine. One owns policy and security; one owns memory and evals; a named owner approves policy changes.
+- **Milestones are demos, not feature lists:** "a risky action is blocked and approved", "a mistake is learned once and not repeated", "a ticket goes from intake to a reviewed PR with two human gates", "the audit log replays why a decision was made".
+- **Pilot early** on one real brownfield repo (it exposes gaps faster than a greenfield demo) and one small greenfield project; compare against baselines.
+- **Keep a decisions log** (ADRs) for the framework itself, reviewed by a human.
+- **Version the core** and the packs; keep a changelog; run conformance tests per harness adapter (does it load context, hit the gate, emit events) with real processes, in the spirit of nebula's end-to-end tests.
+- **Governance overhead scales with use:** do not enable heavy controls (council, durable engine, visual layer) before the data shows they are needed.
+
+## 15. Configuration samples
+
+`project.yaml` (illustrative; schema to be defined in phase 1):
+
+```yaml
+# .agents/project.yaml
+project: orders-service
+mode: brownfield                 # greenfield | brownfield
+stack: dotnet                    # selects a stack pack
+commands: { build: "dotnet build", test: "dotnet test", lint: "dotnet format --verify-no-changes" }
+tiers:                           # role -> model tier (tiers.yaml maps tiers to models)
+  analyst: standard
+  builder: standard
+  reviewer: standard
+  council_chair: strong
+  summariser: cheap
+budgets: { per_task_tokens: 400000, per_day_cost: 50 }
+no_go_paths: ["infra/prod/**", "**/.env", "db/migrations/legacy/**"]
+tools_enabled: [git.read, git.branch, ci.run_tests, files.search, tickets.read, wiki.search]
+environments: [dev, staging]     # never prod for agents
+data_policy: { allowed_models: [approved-endpoint-a], retention: zero }
+```
+
+Tool registry entry:
+
+```yaml
+- id: github.create_pr
+  source: mcp:github
+  version: 1.4.2
+  risk: medium
+  effect: write-reversible
+  data_class: internal
+  allowed_roles: [builder, reviewer]
+  environments: [dev, staging]
+  approval: auto
+  owner: platform-team
+```
+
+Vault note frontmatter:
+
+```yaml
+---
+type: lesson
+status: inbox        # inbox | validated | deprecated
+trust: agent-inferred  # agent-inferred | test-verified | human-confirmed
+confidence: 0.6
+created: 2026-10-27
+supersedes: []
+---
+```
+
+## 16. Evidence and verification status
 
 Sources are mostly vendor or practitioner material. Items to verify against primary documents before they become hard requirements:
 
@@ -367,6 +548,9 @@ Sources are mostly vendor or practitioner material. Items to verify against prim
 | Specific numbers (false-positive rates, kill-rate targets, calibration set size, MTTR, cost savings, failure-mode percentages, the 18% MCP scoping statistic) | Treat as indicative only |
 | DORA seven capabilities (only the landing page was read) | DORA report |
 | METR study details (secondary reports) | METR primary report |
+| Spec Kit, Kiro, OpenSpec, Tessl status and features (secondary blogs; Spec Kit v1.0.0 date from a search summary of the official history) | Each project's own repository or docs (kiro.dev, github.com/Fission-AI/OpenSpec, GitHub spec-kit) |
+| Council pattern (anonymised peer ranking and chair synthesis) | karpathy/llm-council repository README |
+| Autonomous agent products (Devin, OpenHands, Copilot coding agent, Jules) | Vendor docs; not re-checked in this review |
 
 ### Sources
 
@@ -389,4 +573,6 @@ Sources are mostly vendor or practitioner material. Items to verify against prim
 - Productivity measurement (METR trial, secondary): https://www.infoq.com/news/2025/07/ai-productivity · https://getdx.com/blog/metr-study-on-how-ai-affects-developer-productivity/
 - Cost optimisation (vendor, indicative): https://blog.premai.io/llm-cost-optimization-8-strategies-that-cut-api-spend-by-80-2026-guide · https://www.gmicloud.ai/en/blog/llm-inference-cost-optimization-caching-batching-routing
 - Durable execution: https://docs.langchain.com/oss/python/langgraph/durable-execution · https://temporal.io/blog/manetu-the-thread-is-the-workflow · https://rubinlake.com/en/technology-radar/ai-and-data-engineering/ignoring-durability-agent-workflows
+- Spec-driven alternatives: https://ssojet.com/blog/best-spec-driven-development-tools · https://github.github.com/spec-kit/history.html · https://kiro.dev/docs/getting-started/first-project/ · https://github.com/Fission-AI/OpenSpec · https://developertoolkit.ai/en/ecosystem/frameworks/openspec/
+- LLM council pattern: https://www.analyticsvidhya.com/blog/2025/12/llm-council-by-andrej-karpathy/ · https://virtuslab.com/blog/ai/llm-llm-council/
 - Reference repos: https://github.com/agentSystemLabs/nebula · https://github.com/bmad-code-org/BMAD-METHOD
