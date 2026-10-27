@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from .action import Action, SessionState
 from .common import (
     SCHEMA_VERSION,
     Approval,
@@ -25,9 +26,11 @@ from .policy import Policy
 from .project import ProjectConfig, TiersConfig
 from .task import Task, TaskState
 from .tool_registry import ToolEntry, ToolRegistry
+from .verdict import RuleMatch, Verdict
 from .wiki import WikiFrontmatter
 
 SCHEMAS: dict[str, type[BaseModel]] = {
+    "action": Action,
     "decision-card": DecisionCard,
     "event": Event,
     "policy": Policy,
@@ -35,6 +38,7 @@ SCHEMAS: dict[str, type[BaseModel]] = {
     "task": Task,
     "tiers": TiersConfig,
     "tool-registry": ToolRegistry,
+    "verdict": Verdict,
     "wiki-frontmatter": WikiFrontmatter,
 }
 
@@ -59,6 +63,7 @@ def export_json_schemas(out_dir: str | Path) -> list[Path]:
 __all__ = [
     "SCHEMAS",
     "SCHEMA_VERSION",
+    "Action",
     "Approval",
     "DataClass",
     "Decision",
@@ -70,6 +75,8 @@ __all__ = [
     "Policy",
     "ProjectConfig",
     "RiskClass",
+    "RuleMatch",
+    "SessionState",
     "Task",
     "TaskState",
     "Tier",
@@ -77,6 +84,7 @@ __all__ = [
     "ToolEntry",
     "ToolRegistry",
     "TrustLabel",
+    "Verdict",
     "WikiFrontmatter",
     "export_json_schemas",
     "json_schema",

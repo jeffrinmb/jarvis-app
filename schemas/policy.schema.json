@@ -24,6 +24,19 @@
           "default": null,
           "title": "Max Diff Lines"
         },
+        "min_diff_lines": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Diff Lines"
+        },
         "paths": {
           "description": "Path globs touched",
           "items": {
@@ -33,6 +46,17 @@
           "type": "array"
         },
         "risk_at_least": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskClass"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "risk_at_most": {
           "anyOf": [
             {
               "$ref": "#/$defs/RiskClass"

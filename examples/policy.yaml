@@ -9,10 +9,11 @@ auto_approve:
       paths: ["docs/**", "tests/**"]
       max_diff_lines: 200
   - id: dev-branch-work
-    description: Any change confined to a task branch in the dev environment
+    description: Low-risk work confined to a task branch in the dev environment
     when:
       environments: [dev]
-      risk_at_least: read
+      risk_at_most: low
+      max_diff_lines: 400
 
 council_review:
   - id: new-dependency
