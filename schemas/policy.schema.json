@@ -1,0 +1,179 @@
+{
+  "$defs": {
+    "Condition": {
+      "additionalProperties": false,
+      "description": "All specified fields must match. Unspecified fields match anything.",
+      "properties": {
+        "environments": {
+          "items": {
+            "$ref": "#/$defs/Environment"
+          },
+          "title": "Environments",
+          "type": "array"
+        },
+        "max_diff_lines": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Diff Lines"
+        },
+        "paths": {
+          "description": "Path globs touched",
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "risk_at_least": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskClass"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tainted": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tainted"
+        },
+        "tools": {
+          "description": "Tool id globs",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "title": "Condition",
+      "type": "object"
+    },
+    "Decision": {
+      "description": "Outcome of a policy check.",
+      "enum": [
+        "allow",
+        "council",
+        "human",
+        "deny"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "Environment": {
+      "enum": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "title": "Environment",
+      "type": "string"
+    },
+    "RiskClass": {
+      "description": "Ordered from least to most risky; use ``rank`` to compare.",
+      "enum": [
+        "read",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskClass",
+      "type": "string"
+    },
+    "Rule": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "when": {
+          "$ref": "#/$defs/Condition"
+        }
+      },
+      "required": [
+        "id",
+        "description"
+      ],
+      "title": "Rule",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "auto_approve": {
+      "items": {
+        "$ref": "#/$defs/Rule"
+      },
+      "title": "Auto Approve",
+      "type": "array"
+    },
+    "council_review": {
+      "items": {
+        "$ref": "#/$defs/Rule"
+      },
+      "title": "Council Review",
+      "type": "array"
+    },
+    "default": {
+      "$ref": "#/$defs/Decision",
+      "default": "human"
+    },
+    "human_required": {
+      "items": {
+        "$ref": "#/$defs/Rule"
+      },
+      "title": "Human Required",
+      "type": "array"
+    },
+    "never": {
+      "items": {
+        "$ref": "#/$defs/Rule"
+      },
+      "title": "Never",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "version": {
+      "description": "Policy version, recorded in audit events",
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "Policy",
+  "type": "object"
+}

@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "NoteStatus": {
+      "enum": [
+        "inbox",
+        "validated",
+        "deprecated"
+      ],
+      "title": "NoteStatus",
+      "type": "string"
+    },
+    "NoteTrust": {
+      "description": "Ordered from least to most trusted.",
+      "enum": [
+        "agent-inferred",
+        "test-verified",
+        "human-confirmed"
+      ],
+      "title": "NoteTrust",
+      "type": "string"
+    },
+    "NoteType": {
+      "enum": [
+        "lesson",
+        "decision",
+        "component",
+        "playbook",
+        "incident",
+        "preference"
+      ],
+      "title": "NoteType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "created": {
+      "format": "date",
+      "title": "Created",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Event id, PR or path it came from",
+      "title": "Source"
+    },
+    "status": {
+      "$ref": "#/$defs/NoteStatus",
+      "default": "inbox"
+    },
+    "supersedes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Supersedes",
+      "type": "array"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "trust": {
+      "$ref": "#/$defs/NoteTrust",
+      "default": "agent-inferred"
+    },
+    "type": {
+      "$ref": "#/$defs/NoteType"
+    }
+  },
+  "required": [
+    "type",
+    "confidence",
+    "created"
+  ],
+  "title": "WikiFrontmatter",
+  "type": "object"
+}

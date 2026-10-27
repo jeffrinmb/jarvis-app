@@ -1,0 +1,50 @@
+schema_version: 1
+version: 0.1.0
+default: human
+
+auto_approve:
+  - id: docs-and-tests
+    description: Documentation and test changes under 200 lines
+    when:
+      paths: ["docs/**", "tests/**"]
+      max_diff_lines: 200
+  - id: dev-branch-work
+    description: Any change confined to a task branch in the dev environment
+    when:
+      environments: [dev]
+      risk_at_least: read
+
+council_review:
+  - id: new-dependency
+    description: Adding a dependency needs council advice before a human sees it
+    when:
+      tools: ["deps.add"]
+  - id: public-api-change
+    description: Public API shape changes
+    when:
+      paths: ["**/api/**"]
+
+human_required:
+  - id: production-deploy
+    description: Production deploy or rollback
+    when:
+      environments: [prod]
+  - id: ci-config-changes
+    description: Changing CI configuration, so tests cannot be switched off quietly
+    when:
+      paths: [".github/workflows/**"]
+  - id: destructive-migration
+    description: Destructive data migrations
+    when:
+      tools: ["db.migrate_destructive"]
+  - id: tainted-outbound
+    description: Any medium-or-higher risk action from a session that read untrusted content
+    when:
+      tainted: true
+      risk_at_least: medium
+
+never:
+  - id: secrets-paths
+    description: Agents never touch secrets or environment files
+    when:
+      paths: ["**/.env", "**/secrets/**"]

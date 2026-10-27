@@ -1,0 +1,5 @@
+schema_version: 1
+tiers:
+  cheap: [small-model-a]
+  standard: [mid-model-a, mid-model-b]
+  strong: [large-model-a, large-model-b]

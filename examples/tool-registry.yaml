@@ -1,0 +1,30 @@
+- id: git.read
+  source: native
+  version: "1"
+  risk: read
+  effect: read-only
+  data_class: internal
+  allowed_roles: [analyst, builder, reviewer]
+  environments: [dev, staging]
+  approval: auto
+  owner: platform-team
+- id: github.create_pr
+  source: mcp:github
+  version: 1.4.2
+  risk: medium
+  effect: write-reversible
+  data_class: internal
+  allowed_roles: [builder, reviewer]
+  environments: [dev, staging]
+  approval: auto
+  owner: platform-team
+- id: deploy.production
+  source: native
+  version: "1"
+  risk: critical
+  effect: write-irreversible
+  data_class: restricted
+  allowed_roles: [release-engineer]
+  environments: [prod]
+  approval: human
+  owner: release-team

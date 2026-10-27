@@ -1,0 +1,167 @@
+{
+  "$defs": {
+    "Budgets": {
+      "additionalProperties": false,
+      "properties": {
+        "per_day_cost_usd": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Per Day Cost Usd"
+        },
+        "per_task_tokens": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Per Task Tokens"
+        }
+      },
+      "title": "Budgets",
+      "type": "object"
+    },
+    "DataPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_models": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Allowed Models",
+          "type": "array"
+        },
+        "retention": {
+          "default": "zero",
+          "enum": [
+            "zero",
+            "30d",
+            "standard"
+          ],
+          "title": "Retention",
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowed_models"
+      ],
+      "title": "DataPolicy",
+      "type": "object"
+    },
+    "Environment": {
+      "enum": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "title": "Environment",
+      "type": "string"
+    },
+    "ProjectMode": {
+      "enum": [
+        "greenfield",
+        "brownfield"
+      ],
+      "title": "ProjectMode",
+      "type": "string"
+    },
+    "Tier": {
+      "description": "Model tier requested by a role; ``tiers.yaml`` maps tiers to concrete models.",
+      "enum": [
+        "cheap",
+        "standard",
+        "strong"
+      ],
+      "title": "Tier",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "budgets": {
+      "$ref": "#/$defs/Budgets"
+    },
+    "commands": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Commands",
+      "type": "object"
+    },
+    "data_policy": {
+      "$ref": "#/$defs/DataPolicy"
+    },
+    "environments": {
+      "items": {
+        "$ref": "#/$defs/Environment"
+      },
+      "minItems": 1,
+      "title": "Environments",
+      "type": "array"
+    },
+    "mode": {
+      "$ref": "#/$defs/ProjectMode"
+    },
+    "no_go_paths": {
+      "items": {
+        "type": "string"
+      },
+      "title": "No Go Paths",
+      "type": "array"
+    },
+    "project": {
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "stack": {
+      "minLength": 1,
+      "title": "Stack",
+      "type": "string"
+    },
+    "tiers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Tier"
+      },
+      "description": "Role name to model tier",
+      "title": "Tiers",
+      "type": "object"
+    },
+    "tools_enabled": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tools Enabled",
+      "type": "array"
+    }
+  },
+  "required": [
+    "project",
+    "mode",
+    "stack",
+    "tiers",
+    "environments",
+    "data_policy"
+  ],
+  "title": "ProjectConfig",
+  "type": "object"
+}

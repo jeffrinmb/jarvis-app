@@ -1,0 +1,32 @@
+schema_version: 1
+project: orders-service
+mode: brownfield
+stack: dotnet
+commands:
+  build: dotnet build
+  test: dotnet test
+  lint: dotnet format --verify-no-changes
+tiers:
+  analyst: standard
+  builder: standard
+  reviewer: standard
+  council_chair: strong
+  summariser: cheap
+budgets:
+  per_task_tokens: 400000
+  per_day_cost_usd: 50
+no_go_paths:
+  - infra/prod/**
+  - "**/.env"
+  - db/migrations/legacy/**
+tools_enabled:
+  - git.read
+  - git.branch
+  - ci.run_tests
+  - files.search
+  - tickets.read
+  - wiki.search
+environments: [dev, staging]
+data_policy:
+  allowed_models: [approved-endpoint-a]
+  retention: zero
