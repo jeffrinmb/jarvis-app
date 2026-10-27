@@ -47,12 +47,20 @@ A gate `deny` holds in every Claude Code permission mode, including `bypassPermi
    agentctl hook snippet
    ```
 
-   Use `--runner uv` to run through `uv run --project`, and `--mode enforce` once you are ready.
+   Useful options: `--runner venv` runs the project's `.venv` Python directly (fastest), `--runner uv` goes through `uv run --project`, `--minimal` registers only `PreToolUse`, `SessionStart` and `ConfigChange` (about half the cost), and `--mode enforce` is for later. Hooks added to `.claude/settings.local.json` take effect on the next tool call, with no restart.
 5. **Start a Claude Code session in the project**, work normally, then check the ledger:
 
    ```bash
    agentctl verify --ledger .agents/ledger/events.jsonl
    ```
+
+## Review what it recorded
+
+```bash
+agentctl hook report
+```
+
+It verifies the ledger first, then summarises the decisions: how often the gate would have intervened, by tool and by rule, which Claude Code tools have no mapping, and a list of what would have been stopped with example paths, so you can judge whether each intervention is sensible. Add `--json` for a machine-readable form. Findings from the first round are in the [dogfood log](dogfood-log.md).
 
 ## What is recorded
 
@@ -63,7 +71,8 @@ Every decision records: the tool and its registry id, the project-relative paths
 ## How a call is classified
 
 - **Tools.** `Read`, `Glob`, `Grep` map to `fs.read`; `Write`, `Edit`, `MultiEdit`, `NotebookEdit` to `fs.write`; `WebFetch`, `WebSearch` to `web.fetch`; `Agent` to `agent.spawn`. Any other tool, and any MCP tool that is not in your registry, is **denied**. MCP trust is judged by the tool you register, never by its name.
-- **Shell.** A command is a read (`shell.read`) or a test run (`shell.test`) only if it is a single plain command that starts with an allowed prefix, such as `git status` or `uv run pytest`. Anything with chaining, pipes, redirects, substitution or unusual arguments is a general shell call (`shell.run`), which needs a human. The `description` field the agent writes is ignored.
+- **Shell.** A command is a read (`shell.read`) or a test run (`shell.test`) only if it is a single plain command that starts with an allowed prefix, such as `git status` or `uv run pytest`. Anything with chaining, pipes, redirects, substitution or unusual arguments is a general shell call (`shell.run`), which needs a human. Two very common habits are understood: a leading `cd <dir> &&` into the project is ignored, and trailing `2>&1`, `| head -N`, `| tail -N` and `| wc -l` are ignored, because they cannot change what the command does. A `cd` anywhere else, a variable, or any other pipe target keeps it a general shell call. The `description` field the agent writes is ignored.
+- **Bookkeeping tools.** Claude Code's own `ToolSearch`, `Skill`, `Task*`, `TodoWrite`, plan-mode and question tools map to an internal read-only tool. Other MCP tools must be registered, and their output is untrusted unless you list them under `trust_overrides`.
 - **Paths.** Absolute paths inside the project become relative. A path outside the project, or one that climbs out with `..`, stays absolute and goes to a human.
 - **Edit size.** Counted from the real arguments as an upper bound. Unknown sizes (for example a shell command) never help a call get approved.
 - **Exposure.** A session becomes *tainted* when a call that brings in untrusted content is **requested** (web fetches and searches, MCP tools, reads under third-party paths, shell commands that look like they fetch from the network), and it is marked as having seen *restricted data* when it reads a secret-looking file. This is applied at request time, not when the result arrives, so a lost `PostToolUse` cannot hide it. The gate then tightens: for example, edits after reading untrusted content need a human, and untrusted content plus restricted data plus an outbound call is the lethal trifecta.
@@ -74,7 +83,7 @@ Every decision records: the tool and its registry id, the project-relative paths
 - Session state lives in a user-level directory outside the project, but it is an ordinary file. An agent with shell access could in principle edit it. The gate treats the framework's own files as human-gated paths in the example policy, and the sandbox will close this properly.
 - In `enforce` mode, **blocking `ConfigChange`** also stops you changing your own Claude Code settings during a session. Turn it off with `block_config_changes: false` if that gets in the way.
 - Parallel tool calls in one turn may run their hooks at the same time, so exposure from one call may not yet be visible to another in the same batch.
-- Each tool call starts a Python process. Latency has not been measured (P2.6c); if it is too slow the plan is an `http` hook to a local service (P4.1a).
+- **Cost per call.** Each hook run starts a Python process and takes about **one second** on the machine it was measured on (mostly importing pydantic and building the schemas; see [the dogfood log](dogfood-log.md)). Registering `PostToolUse` as well doubles that. Use `--minimal` and `--runner venv` to keep it down. Making it fast enough for everyday enforcement is task P2.6e.
 - Unattended `claude -p` runs trust the folder, so a repository's own `.claude/settings.json` hooks run without a prompt. Review `.claude/` before running unattended on a repository you did not write.
 
 ## Configuration

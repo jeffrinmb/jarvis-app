@@ -68,6 +68,7 @@ More diagrams (decision routing, pipeline and gates, memory, learning loop, inje
 | [Architecture diagrams](docs/architecture.md) | Mermaid diagrams for the system, decision flow, pipeline, memory, learning loop, tool access and roadmap |
 | [TODO list](docs/TODO.md) | Phase-by-phase, task-by-task plan with exit checks and a suggested first two weeks |
 | [Claude Code hook](docs/claude-code-hook.md) | How `agentctl hook` connects Claude Code to the policy gate: setup, modes, what is recorded, and its limits |
+| [Dogfood log](docs/dogfood-log.md) | What happened when the hook ran on this repository: numbers, false positives fixed, latency, and decisions still open |
 | [Traceability](docs/traceability.md) | Every requirement mapped to the tasks that deliver it, so nothing we decided to build is untracked |
 | [Threat model](docs/threat-model.md) | The ten OWASP agentic risks mapped to controls, gaps and red-team cases, plus threats specific to this framework |
 | [Schema changelog](docs/schema-changelog.md) | Versioning policy for the schemas, how to change one, and the change history |
@@ -149,8 +150,10 @@ uv run agentctl hook doctor
 ```
 
 ```bash
-uv run agentctl hook snippet
+uv run agentctl hook snippet --runner venv --minimal
 ```
+
+After some work, see what it would have done: `uv run agentctl hook report`. The first round of findings on this repository is in [docs/dogfood-log.md](docs/dogfood-log.md).
 
 A ledger file cannot reveal that its tail was cut off or that the whole chain was rewritten consistently. Record an anchor (`agentctl head`) elsewhere and pass it to `verify --anchor` to detect both.
 

@@ -1,0 +1,12 @@
+# Adapter configuration for the Claude Code hook on this repository (dogfooding, task P2.6d).
+schema_version: 1
+mode: log-only      # records what the gate would decide and never blocks
+role: builder
+environment: dev
+on_behalf_of: jeffrinmb
+
+# The app's own UI tools are vetted, so their output is trusted (MCP output is otherwise untrusted).
+trust_overrides:
+  mcp__ccd_turn__update_plan: internal
+  mcp__ccd_turn__wrap_up: internal
+  mcp__ccd_directory__propose_branch: internal

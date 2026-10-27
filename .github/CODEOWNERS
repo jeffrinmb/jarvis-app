@@ -14,6 +14,9 @@
 /schemas/                   @jeffrinmb
 /examples/policy.yaml       @jeffrinmb
 
+# Agent policy, tool registry and hook configuration for this repository
+/.agents/                   @jeffrinmb
+
 # Automation and repository rules
 /.github/                   @jeffrinmb
 /LICENSE                    @jeffrinmb
