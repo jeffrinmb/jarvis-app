@@ -10,7 +10,7 @@ The project is in early development (version 0.0.x). Only the latest commit on `
 
 Please **do not open a public issue** for a security problem.
 
-Use GitHub's private vulnerability reporting: open the repository's **Security** tab and choose **Report a vulnerability**. This sends the report privately to the maintainers.
+Use GitHub's private vulnerability reporting: open the repository's **Security** tab, then **Advisories**, and choose **Report a vulnerability**. This sends the report privately to the maintainers.
 
 If that option is not available, open a public issue that says only that you have a security concern and asks for a private contact. Do not include details in it.
 
