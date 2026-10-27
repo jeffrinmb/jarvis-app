@@ -1,4 +1,5 @@
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
@@ -257,6 +258,23 @@ def test_stale_lock_times_out_with_a_helpful_error(tmp_path):
         ledger.append(make_event())
 
 
+def test_lock_contention_that_raises_permission_error_is_retried(ledger, monkeypatch):
+    """Windows raises PermissionError (not FileExistsError) when a lock file is being deleted."""
+    real_open = os.open
+    calls = {"n": 0}
+
+    def flaky_open(path, *args, **kwargs):
+        if str(path).endswith(".lock") and calls["n"] < 3:
+            calls["n"] += 1
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", flaky_open)
+    ledger.append(make_event())
+    assert calls["n"] == 3
+    assert ledger.verify().records == 1
+
+
 def test_lock_file_is_removed_after_append(ledger):
     ledger.append(make_event())
     assert not ledger.path.with_name(ledger.path.name + ".lock").exists()
@@ -267,12 +285,12 @@ def test_concurrent_appends_keep_the_chain_intact(tmp_path):
 
     def work(worker: int) -> None:
         local = Ledger(path, lock_timeout=30)
-        for i in range(10):
+        for i in range(25):
             local.append(make_event(i, agent_id=f"agent-{worker}"))
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        list(pool.map(work, range(4)))
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(work, range(8)))
 
     result = Ledger(path).verify()
-    assert result.ok and result.records == 40
-    assert [r["seq"] for r in Ledger(path).records()] == list(range(40))
+    assert result.ok and result.records == 200
+    assert [r["seq"] for r in Ledger(path).records()] == list(range(200))

@@ -22,7 +22,7 @@ import json
 import os
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -109,11 +109,14 @@ class Ledger:
             try:
                 fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 break
-            except FileExistsError:
+            except (FileExistsError, PermissionError) as exc:
+                # On Windows, creating a file that another writer has just deleted (still
+                # "delete pending") raises PermissionError instead of FileExistsError.
                 if time.monotonic() > deadline:
                     raise LedgerLockError(
-                        f"could not lock {lock_path} within {self.lock_timeout}s; "
-                        "if no writer is running the lock is stale and can be deleted"
+                        f"could not lock {lock_path} within {self.lock_timeout}s "
+                        f"({type(exc).__name__}); if no writer is running the lock is "
+                        "stale and can be deleted"
                     ) from None
                 time.sleep(0.02)
         try:
@@ -121,8 +124,21 @@ class Ledger:
             yield
         finally:
             os.close(fd)
-            with suppress(FileNotFoundError):
+            self._remove_lock(lock_path)
+
+    @staticmethod
+    def _remove_lock(lock_path: Path) -> None:
+        for attempt in range(50):
+            try:
                 os.unlink(lock_path)
+                return
+            except FileNotFoundError:
+                return
+            except PermissionError:
+                # Windows: a virus scanner or another handle can briefly block deletion.
+                if attempt == 49:
+                    raise
+                time.sleep(0.02)
 
     def _last_record(self) -> dict[str, Any] | None:
         """Read and check only the final record, so appends stay cheap."""
