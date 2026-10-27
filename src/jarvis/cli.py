@@ -35,6 +35,7 @@ from jarvis.core.schemas import (
     load_yaml_model,
 )
 from jarvis.core.schemas.event import ModelRef, ToolRef, Usage
+from jarvis.hook_cli import add_hook_parser, run_hook_command
 
 DEFAULT_LEDGER = ".agents/ledger/events.jsonl"
 DEFAULT_POLICY = ".agents/policy.yaml"
@@ -118,6 +119,8 @@ def _build_parser() -> argparse.ArgumentParser:
     export = schema_sub.add_parser("export", help="write JSON Schema files")
     export.add_argument("--out", default="schemas")
 
+    add_hook_parser(sub)
+
     return parser
 
 
@@ -195,6 +198,9 @@ def main(argv: list[str] | None = None) -> int:
         for path in export_json_schemas(args.out):
             print(path)
         return 0
+
+    if args.command == "hook":
+        return run_hook_command(args)
 
     ledger = Ledger(_ledger_path(args.ledger))
 

@@ -1,0 +1,13 @@
+# Adapter configuration. Copy to .agents/claude-code.yaml. Everything here has a safe default.
+schema_version: 1
+mode: log-only          # log-only records and never blocks; enforce blocks (see docs/claude-code-hook.md)
+role: builder           # the role this session acts in; must be allowed by the tool registry
+environment: dev
+# on_behalf_of: your-name   # accountable human; defaults to $JARVIS_ON_BEHALF_OF, then the OS user
+
+# Paths whose contents should be treated as untrusted when read (third-party or downloaded code).
+# untrusted_paths: ["**/node_modules/**", "**/vendor/**"]
+
+# A vetted tool whose output you trust (registry tool id -> trust).
+# trust_overrides:
+#   mcp__internal_docs__search: internal
