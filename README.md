@@ -67,6 +67,7 @@ More diagrams (decision routing, pipeline and gates, memory, learning loop, inje
 | [Framework charter](docs/framework-charter.md) | Principles, architecture, autonomy tiers, practices for each SDLC phase, cross-cutting controls, roadmap, risks, open decisions, and the verification status of every external claim |
 | [Architecture diagrams](docs/architecture.md) | Mermaid diagrams for the system, decision flow, pipeline, memory, learning loop, tool access and roadmap |
 | [TODO list](docs/TODO.md) | Phase-by-phase, task-by-task plan with exit checks and a suggested first two weeks |
+| [Traceability](docs/traceability.md) | Every requirement mapped to the tasks that deliver it, so nothing we decided to build is untracked |
 | [Threat model](docs/threat-model.md) | The ten OWASP agentic risks mapped to controls, gaps and red-team cases, plus threats specific to this framework |
 | [Schema changelog](docs/schema-changelog.md) | Versioning policy for the schemas, how to change one, and the change history |
 | [Contributing](CONTRIBUTING.md) | Setup, checks to run, branch and pull request workflow, rules for AI-assisted contributions |

@@ -50,6 +50,32 @@ def test_changelog_has_an_unreleased_section():
     assert "### Unreleased" in (DOCS / "schema-changelog.md").read_text(encoding="utf-8")
 
 
+_TASK_ID = re.compile(r"\bP\d+\.\d+[a-z]?\b")
+
+
+def _todo_ids():
+    text = (DOCS / "TODO.md").read_text(encoding="utf-8")
+    return set(re.findall(r"\*\*(P\d+\.\d+[a-z]?)\*\*", text))
+
+
+def test_traceability_and_todo_list_the_same_tasks():
+    todo = _todo_ids()
+    matrix = set(_TASK_ID.findall((DOCS / "traceability.md").read_text(encoding="utf-8")))
+    assert todo, "no task ids found in docs/TODO.md"
+    untracked = sorted(todo - matrix)
+    unknown = sorted(matrix - todo)
+    assert not untracked, (
+        f"tasks in TODO.md that serve no requirement in traceability.md: {untracked}"
+    )
+    assert not unknown, f"traceability.md names tasks that are not in TODO.md: {unknown}"
+
+
+def test_task_ids_in_todo_are_unique():
+    text = (DOCS / "TODO.md").read_text(encoding="utf-8")
+    ids = re.findall(r"^- \[[ x]\] \*\*(P\d+\.\d+[a-z]?)\*\*", text, re.MULTILINE)
+    assert len(ids) == len(set(ids)), "duplicate task ids in docs/TODO.md"
+
+
 def test_tests_cited_by_the_threat_model_exist():
     path = DOCS / "threat-model.md"
     if not path.exists():
