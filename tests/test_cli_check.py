@@ -102,6 +102,15 @@ def test_dry_run_still_sees_history_when_a_ledger_exists(files, capsys):
     assert Ledger(files / "ledger.jsonl").verify().records == 1  # nothing new written
 
 
+def test_yaml_object_tags_are_rejected_not_executed(files, tmp_path, capsys):
+    marker = tmp_path / "pwned.txt"
+    evil = f'tool_id: !!python/object/apply:os.system ["echo pwned > {marker.as_posix()}"]\n'
+    (files / "evil.yaml").write_text(evil, encoding="utf-8")
+    assert check(files, action="evil.yaml") == 2
+    assert "invalid input" in capsys.readouterr().err
+    assert not marker.exists()
+
+
 def test_invalid_action_exits_2(files, capsys):
     (files / "bad.json").write_text('{"tool_id": "fs.write", "risk": "read"}', encoding="utf-8")
     assert check(files, action="bad.json") == 2

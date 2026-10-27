@@ -8,10 +8,14 @@ on:
 permissions:
   contents: read
 
+# Every third-party action is pinned to a full commit SHA (tests/test_ci_workflow.py enforces
+# this). The comment after each SHA is the version it was resolved from; Dependabot updates both.
+
 jobs:
   test:
     name: test (${{ matrix.os }}, py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -20,8 +24,10 @@ jobs:
         os: [ubuntu-24.04, ubuntu-26.04, windows-latest]
         python: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python }}
       - name: Install uv
@@ -35,27 +41,54 @@ jobs:
       - name: Tests
         run: uv run pytest
 
-  # Single required check for branch protection. It passes only if every matrix job
-  # passed, so the ruleset never needs editing when the matrix changes. `always()`
-  # makes it run (and fail) even when a test job failed; a skipped required check
-  # could otherwise be treated as passing. If more jobs or workflows are added,
-  # add them to `needs`.
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # scan the full history, not just the tip
+          persist-credentials: false
+      # gitleaks is installed from a pinned release and verified against a pinned SHA-256, so a
+      # changed or tampered download fails the job. To upgrade, change both values together:
+      # take the new hash for gitleaks_<version>_linux_x64.tar.gz from that release's
+      # gitleaks_<version>_checksums.txt.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" version
+      - name: Scan history for secrets
+        run: '"$RUNNER_TEMP/gitleaks" git --no-banner --redact --verbose --config .gitleaks.toml .'
+
+  # Single required check for branch protection. It passes only if every job it needs
+  # succeeded, so the ruleset never needs editing when jobs or the matrix change. `always()`
+  # makes it run (and fail) even when a needed job failed; a skipped required check could
+  # otherwise be treated as passing. tests/test_ci_workflow.py fails if a job is missing from
+  # `needs`.
   ci-ok:
     name: ci-ok
-    needs: [test]
+    needs: [test, secret-scan]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Fail unless all required jobs succeeded
         env:
           TEST_RESULT: ${{ needs.test.result }}
+          SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
         run: |
           echo "test: $TEST_RESULT"
-          if [ "$TEST_RESULT" != "success" ]; then
+          echo "secret-scan: $SECRET_SCAN_RESULT"
+          if [ "$TEST_RESULT" != "success" ] || [ "$SECRET_SCAN_RESULT" != "success" ]; then
             echo "A required job did not succeed."
             exit 1
           fi
-
-# TODO (see docs/TODO.md P1.5): add secret scanning and a dependency allowlist
-# check, and pin the actions above to commit SHAs (checkout v7.0.1, setup-python v7.1.0
-# were the latest releases and run on Node 24 when this was written).

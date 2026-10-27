@@ -33,6 +33,12 @@ uv run ruff format --check .
 uv run pytest
 ```
 
+CI also scans the full git history for secrets with [gitleaks](https://github.com/gitleaks/gitleaks), so never commit a key or token, even in a commit you later remove. If you have gitleaks installed you can run the same scan first:
+
+```bash
+gitleaks git --redact --verbose --config .gitleaks.toml .
+```
+
 If you changed a schema in `src/jarvis/core/schemas/`, regenerate the JSON Schemas and commit the result. A test fails if they are out of date:
 
 ```bash
