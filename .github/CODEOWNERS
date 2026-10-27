@@ -17,6 +17,7 @@
 # Automation and repository rules
 /.github/                   @jeffrinmb
 /LICENSE                    @jeffrinmb
+/NOTICE                     @jeffrinmb
 /SECURITY.md                @jeffrinmb
 
 # Charter and decisions
