@@ -133,7 +133,11 @@ def _store(ctx: HookContext) -> SessionStore:
 
 
 def _context(inp: HookInput, ctx: HookContext) -> dict[str, Any]:
+    server = None
+    if inp.mcp_server is not None:
+        server = {"name": inp.mcp_server.name, "source": inp.mcp_server.source}
     return {
+        "mcp_server": server,
         "harness": "claude-code",
         "mode": ctx.mode.value,
         "hook_event": inp.hook_event_name,

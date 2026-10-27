@@ -14,6 +14,7 @@ import hashlib
 import os
 import re
 import shlex
+import sys
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -38,10 +39,19 @@ BUILTIN_TOOL_MAP: dict[str, str] = {
     "WebSearch": "web.fetch",
     "Agent": "agent.spawn",
     "Task": "agent.spawn",
+    # Claude Code's own bookkeeping tools: they read or write only session state.
     "AskUserQuestion": "claude.internal",
     "ExitPlanMode": "claude.internal",
     "EnterPlanMode": "claude.internal",
     "TodoWrite": "claude.internal",
+    "ToolSearch": "claude.internal",
+    "Skill": "claude.internal",
+    "TaskCreate": "claude.internal",
+    "TaskUpdate": "claude.internal",
+    "TaskList": "claude.internal",
+    "TaskGet": "claude.internal",
+    "TaskOutput": "claude.internal",
+    "TaskStop": "claude.internal",
 }
 
 SHELL_TOOLS = {"Bash", "PowerShell"}
@@ -94,6 +104,60 @@ def registry_tool_id(claude_tool: str, cfg: HookConfig) -> str:
     if claude_tool in BUILTIN_TOOL_MAP:
         return BUILTIN_TOOL_MAP[claude_tool]
     return claude_tool if claude_tool.startswith("mcp__") else f"claude.{claude_tool}"
+
+
+_LEADING_CD = re.compile(
+    r"""^\s*cd\s+(?:"(?P<dq>[^"$`]+)"|'(?P<sq>[^']+)'|(?P<bare>[A-Za-z0-9_./:-]+))"""
+    r"""\s*&&\s*(?P<rest>\S.*)$""",
+    re.DOTALL,
+)
+
+
+def _msys_to_native(path: str) -> str:
+    """Git Bash on Windows writes ``D:\\x`` as ``/d/x``."""
+    if sys.platform == "win32" and re.match(r"^/[A-Za-z]/", path):
+        return f"{path[1].upper()}:{path[2:]}"
+    return path
+
+
+def strip_leading_cd(command: str, project_dir: str) -> str:
+    """Drop a leading ``cd <dir> &&`` when ``<dir>`` is inside the project.
+
+    Claude Code often writes ``cd <project> && git status``. The ``cd`` has no effect beyond
+    the rest of that one command line, so classifying the remainder is safe. A ``cd`` to
+    anywhere outside the project, a variable or a substitution is left in place, which makes
+    the command a general shell call.
+    """
+    match = _LEADING_CD.match(command)
+    if not match:
+        return command
+    target = _msys_to_native(match.group("dq") or match.group("sq") or match.group("bare"))
+    if not os.path.isabs(target):
+        target = os.path.join(project_dir, target)
+    inside = project_relative(target, project_dir)
+    if os.path.isabs(inside):
+        return command
+    return match.group("rest")
+
+
+_OUTPUT_FILTER = re.compile(
+    r"\s*(?:2>&1|\|\s*(?:head|tail)(?:\s+-n?\s*\d+|\s+-\d+)?|\|\s*wc\s+-l)\s*$"
+)
+
+
+def strip_output_filters(command: str) -> str:
+    """Drop trailing ``2>&1``, ``| head -N``, ``| tail -N`` and ``| wc -l``.
+
+    Claude Code commonly trims output this way. These only read the previous command's output
+    and take no file arguments, so removing them before classification is safe; anything else
+    after a pipe (including ``head file`` or ``tee``) is left in place and keeps the command a
+    general shell call.
+    """
+    previous = None
+    while previous != command:
+        previous = command
+        command = _OUTPUT_FILTER.sub("", command)
+    return command
 
 
 def classify_shell(command: str, cfg: HookConfig) -> str:
@@ -267,7 +331,8 @@ def build_action(
     shell_class: str | None = None
 
     if claude_tool in SHELL_TOOLS and tool_id == "shell.run":
-        shell_class = classify_shell(str(inp.tool_input.get("command") or ""), cfg)
+        command = strip_leading_cd(str(inp.tool_input.get("command") or ""), project_dir)
+        shell_class = classify_shell(strip_output_filters(command), cfg)
         tool_id = {"read": "shell.read", "test": "shell.test"}.get(shell_class, "shell.run")
 
     paths = paths_for(claude_tool, inp.tool_input, project_dir)

@@ -28,6 +28,8 @@ from jarvis.adapters.claude_code import (
     parse_version,
 )
 from jarvis.adapters.claude_code.config import DEFAULT_CONFIG
+from jarvis.adapters.claude_code.report import render_text, summarize
+from jarvis.core.ledger import Ledger
 
 
 def add_hook_parser(sub: argparse._SubParsersAction) -> None:
@@ -48,23 +50,53 @@ def add_hook_parser(sub: argparse._SubParsersAction) -> None:
     snippet.add_argument("--mode", choices=[m.value for m in HookMode], default="log-only")
     snippet.add_argument(
         "--runner",
-        choices=["direct", "uv"],
+        choices=["direct", "uv", "venv"],
         default="direct",
-        help="direct runs `agentctl` from PATH; uv runs it through `uv run --project`",
+        help="direct runs `agentctl` from PATH; uv runs it through `uv run --project`; "
+        "venv runs the project's .venv Python directly (fastest)",
+    )
+    snippet.add_argument(
+        "--minimal",
+        action="store_true",
+        help="register only PreToolUse, SessionStart and ConfigChange (about half the cost)",
     )
 
     doctor = hook_sub.add_parser("doctor", help="check this machine can run the hook in a mode")
     doctor.add_argument("--mode", choices=[m.value for m in HookMode], default="log-only")
+
+    report = hook_sub.add_parser("report", help="summarise the decisions the hook recorded")
+    report.add_argument("--ledger", help="default: <project>/.agents/ledger/events.jsonl")
+    report.add_argument("--json", action="store_true", help="print the summary as JSON")
 
 
 def run_hook_command(args: argparse.Namespace) -> int:
     if args.hook_command == "run":
         return _run(args)
     if args.hook_command == "snippet":
-        settings = build_settings(HookMode(args.mode), args.runner)
+        settings = build_settings(HookMode(args.mode), args.runner, minimal=args.minimal)
         print(json.dumps(settings, indent=2))
         return 0
+    if args.hook_command == "report":
+        return _report(args)
     return _doctor(args)
+
+
+def _report(args: argparse.Namespace) -> int:
+    project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+    path = Path(args.ledger) if args.ledger else project_dir / HookConfig().ledger_path
+    ledger = Ledger(path)
+    if not path.exists():
+        print(f"ledger not found: {path}", file=sys.stderr)
+        return 2
+    result = ledger.verify()
+    if not result.ok:
+        print(
+            f"ledger fails verification: {result.error} (seq {result.error_seq})", file=sys.stderr
+        )
+        return 1
+    summary = summarize(ledger.records())
+    print(json.dumps(summary, indent=2) if args.json else render_text(summary))
+    return 0
 
 
 def _read_stdin() -> str:
