@@ -1,0 +1,114 @@
+# Tools the Claude Code hook can map to. Copy to .agents/tool-registry.yaml and adjust.
+# Anything not listed here (including every MCP tool) is denied by the gate.
+- id: fs.read
+  source: native
+  version: "1"
+  risk: read
+  effect: read-only
+  data_class: internal
+  allowed_roles: [builder, reviewer, analyst]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
+- id: fs.write
+  source: native
+  version: "1"
+  risk: low
+  effect: write-reversible
+  data_class: internal
+  allowed_roles: [builder]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
+- id: shell.read
+  source: native
+  version: "1"
+  risk: read
+  effect: read-only
+  data_class: internal
+  allowed_roles: [builder, reviewer]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
+- id: shell.test
+  source: native
+  version: "1"
+  risk: medium
+  effect: write-reversible
+  data_class: internal
+  allowed_roles: [builder]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
+- id: shell.run
+  source: native
+  version: "1"
+  risk: high
+  effect: write-irreversible
+  data_class: internal
+  allowed_roles: [builder]
+  environments: [dev]
+  approval: human
+  owner: platform-team
+- id: web.fetch
+  source: native
+  version: "1"
+  risk: medium
+  effect: external-comms
+  data_class: internal
+  allowed_roles: [builder, analyst]
+  environments: [dev]
+  approval: council
+  owner: platform-team
+- id: agent.spawn
+  source: native
+  version: "1"
+  risk: low
+  effect: write-reversible
+  data_class: internal
+  allowed_roles: [builder, reviewer, analyst]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
+- id: claude.internal
+  source: native
+  version: "1"
+  risk: read
+  effect: read-only
+  data_class: internal
+  allowed_roles: [builder, reviewer, analyst]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
+# --- This repository's own additions (Claude desktop app tools used in this session) ---
+# They only update the on-screen task list, ask where to branch, or similar UI actions.
+- id: mcp__ccd_turn__update_plan
+  source: mcp:claude-desktop
+  version: "1"
+  risk: read
+  effect: read-only
+  data_class: internal
+  allowed_roles: [builder, reviewer, analyst]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
+- id: mcp__ccd_turn__wrap_up
+  source: mcp:claude-desktop
+  version: "1"
+  risk: read
+  effect: read-only
+  data_class: internal
+  allowed_roles: [builder, reviewer, analyst]
+  environments: [dev]
+  approval: auto
+  owner: platform-team
+- id: mcp__ccd_directory__propose_branch
+  source: mcp:claude-desktop
+  version: "1"
+  risk: read
+  effect: read-only
+  data_class: internal
+  allowed_roles: [builder, reviewer, analyst]
+  environments: [dev]
+  approval: auto
+  owner: platform-team

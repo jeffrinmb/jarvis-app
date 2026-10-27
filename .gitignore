@@ -22,3 +22,6 @@ build/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local Claude Code settings (hook wiring is per-machine)
+.claude/settings.local.json

@@ -109,6 +109,86 @@ def test_run_uses_the_project_directory_from_the_environment(project, monkeypatc
     assert (project / ".agents" / "ledger" / "events.jsonl").exists()
 
 
+# ---------- report ----------
+
+
+def test_report_summarises_what_the_hook_recorded(project, monkeypatch, capsys):
+    send(monkeypatch, edit(project, "docs/a.md"))
+    send(monkeypatch, edit(project, ".github/workflows/ci.yml"))
+    send(monkeypatch, pre(project, "BrandNewTool", {}))
+    capsys.readouterr()
+    assert main(["hook", "report"]) == 0
+    out = capsys.readouterr().out
+    assert "3 decisions" in out
+    assert "would have intervened on 2" in out
+    assert "BrandNewTool" in out  # listed as a tool with no mapping
+    assert "framework-and-claude-config" in out
+
+
+def test_report_json_is_machine_readable(project, monkeypatch, capsys):
+    send(monkeypatch, edit(project, "docs/a.md"))
+    send(monkeypatch, pre(project, "BrandNewTool", {}))
+    capsys.readouterr()
+    assert main(["hook", "report", "--json"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["total"] == 2
+    assert summary["decisions"] == {"allow": 1, "deny": 1}
+    assert summary["unmapped_tools"] == {"BrandNewTool": 1}
+    assert summary["would_block_rate"] == 0.5
+
+
+def test_report_needs_a_ledger_and_refuses_a_broken_one(project, monkeypatch, capsys):
+    assert main(["hook", "report"]) == 2
+    send(monkeypatch, edit(project, "docs/a.md"))
+    ledger = project / ".agents" / "ledger" / "events.jsonl"
+    ledger.write_bytes(ledger.read_bytes().replace(b"claude-code", b"mallory", 1))
+    capsys.readouterr()
+    assert main(["hook", "report"]) == 1
+    assert "fails verification" in capsys.readouterr().err
+
+
+def _record(
+    decision, tool="fs.write", rules=(), paths=(), harness="claude-code", kind="policy_decision"
+):
+    return {
+        "event": {
+            "kind": kind,
+            "decision": decision,
+            "tool": {"id": tool},
+            "ts": "2026-10-27T10:00:00Z",
+            "data": {
+                "paths": list(paths),
+                "matches": [{"rule_id": r, "effect": decision} for r in rules],
+                "context": {"harness": harness, "mode": "log-only", "claude_tool": "Edit"},
+            },
+        }
+    }
+
+
+def test_summarize_counts_only_this_harness_and_only_decisions():
+    from jarvis.adapters.claude_code.report import summarize
+
+    records = [
+        _record("allow"),
+        _record("human", rules=["r1"], paths=["a", "b", "c", "d", "e"]),
+        _record("human", rules=["r1"], paths=["f"]),
+        _record("allow", harness="something-else"),
+        _record("allow", kind="note"),
+    ]
+    summary = summarize(records)
+    assert summary["total"] == 3
+    assert summary["would_block"] == 2
+    (intervention,) = summary["interventions"]
+    assert intervention["count"] == 2 and intervention["rules"] == ["r1"]
+    assert len(intervention["example_paths"]) == 3  # capped
+
+
+def test_an_empty_ledger_reports_nothing_recorded():
+    from jarvis.adapters.claude_code.report import render_text, summarize
+
+    assert "No Claude Code decisions" in render_text(summarize([]))
+
+
 # ---------- settings snippet ----------
 
 
@@ -127,6 +207,17 @@ def test_snippet_registers_every_handled_event_in_exec_form():
     assert handler["args"] == ["hook", "run", "--mode", "log-only"]
     assert handler["timeout"] == 10
     assert "onFailure" not in handler
+
+
+def test_minimal_snippet_drops_the_post_events_that_double_the_cost():
+    hooks = build_settings(HookMode.LOG_ONLY, minimal=True)["hooks"]
+    assert set(hooks) == {"SessionStart", "PreToolUse", "ConfigChange"}
+
+
+def test_venv_runner_uses_the_project_python_directly():
+    handler = build_settings(HookMode.LOG_ONLY, runner="venv")["hooks"]["PreToolUse"][0]["hooks"][0]
+    assert handler["command"].startswith("${CLAUDE_PROJECT_DIR}/.venv/")
+    assert handler["args"][:2] == ["-m", "jarvis.cli"]
 
 
 def test_enforce_snippet_blocks_on_hook_failure():
@@ -211,6 +302,29 @@ def test_doctor_reports_missing_policy_files(project, monkeypatch, capsys):
 def test_doctor_reports_when_claude_cannot_be_run(project, monkeypatch):
     monkeypatch.setattr(hook_cli, "_claude_version_text", lambda: None)
     assert main(["hook", "doctor"]) == 1
+
+
+# ---------- this repository's own agent configuration is valid ----------
+
+REPO = Path(__file__).resolve().parent.parent
+
+
+def test_this_repositorys_own_agent_files_load_and_stay_in_log_only_mode():
+    policy = load_yaml_model(REPO / ".agents" / "policy.yaml", Policy)
+    registry = load_tool_registry(REPO / ".agents" / "tool-registry.yaml")
+    cfg = load_config(REPO / ".agents" / "claude-code.yaml")
+    assert policy.default.value == "human"
+    assert {"fs.read", "fs.write", "shell.run"} <= {t.id for t in registry.tools}
+    assert cfg.mode is HookMode.LOG_ONLY, "switching this repository to enforce is task P2.10"
+    # every tool whose output is trusted by override must be registered
+    registered = {t.id for t in registry.tools}
+    assert set(cfg.trust_overrides) <= registered
+
+
+def test_shell_run_is_never_auto_approved_in_this_repositorys_registry():
+    registry = load_tool_registry(REPO / ".agents" / "tool-registry.yaml")
+    shell = next(t for t in registry.tools if t.id == "shell.run")
+    assert shell.approval.value == "human"
 
 
 # ---------- shipped examples are valid ----------
