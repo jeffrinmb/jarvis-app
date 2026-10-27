@@ -48,7 +48,7 @@ Goal: stable contracts before any component is built.
 - [ ] **P1.5a** Dependency allowlist and existence check, as a defence against invented or typo-squatted packages. Overlaps P4.11 (PS)
 - [x] **P1.5b** Verify the first real runs of the P1.5 work. _Done: the `ci` workflow, which includes the `secret-scan` job, succeeded on its runs for pull requests 6, 7 and 8; both Dependabot update runs (`uv` and `github_actions`) succeeded, so both entries are accepted; GitHub secret scanning with push protection and private vulnerability reporting are on. No Dependabot pull request has been opened yet; when one appears it must pass CI like any other._ (FO, PS)
 - [ ] **P1.6** ADR template and the first ADRs (storage, schema versioning, trace conventions). _Template and ADR 0001 done; schema versioning and trace conventions ADRs still to do._ (FO)
-- [x] **P1.7** Map the OWASP agentic risks (ASI01 to ASI10) to controls and red-team cases as a threat-model document: [docs/threat-model.md](threat-model.md), with 17 red-team cases and a test that checks every cited test exists (PS)
+- [x] **P1.7** Map the OWASP agentic risks (ASI01 to ASI10) to controls and red-team cases as a threat-model document: [docs/threat-model.md](threat-model.md), with 20 red-team cases and a test that checks every cited test exists (PS)
 
 - [ ] **P1.8** Static analysis (SAST) of the framework's own code in CI, for example CodeQL or Bandit, with findings triaged (PS)
 
@@ -69,9 +69,10 @@ Goal: every action is logged, risky actions are stopped, humans can approve with
 - [ ] **P2.4a** Follow-ups: per-day aggregation, an index so checks do not scan the whole ledger, and path-derived risk (PS, PL)
 - [ ] **P2.4b** Policy integrity (threat model gap G2): record a SHA-256 of the policy, registry and project files in every decision event, and have the hook load them from a location the agent cannot write (PS)
 - [x] **P2.5** Trust labels, taint tracking and the lethal-trifecta check in the gate. _The gate takes session state as input; the Claude Code hook (P2.6) must supply it truthfully._ (PS)
-- [ ] **P2.6a** Before building the hook, check Claude Code's current hook interface against its documentation (events, payload fields, whether a hook can block a call) and record what it can and cannot do in an ADR (PL)
-- [ ] **P2.6** Claude Code hooks that emit events and call `agentctl check` before risky tools, in **log-only mode** first. The hook builds the `Action` from the real tool call and tracks what the session has seen (untrusted content, private data) (PL)
+- [x] **P2.6a** Before building the hook, check Claude Code's current hook interface against its documentation (events, payload fields, whether a hook can block a call) and record what it can and cannot do in an ADR: [ADR 0003](adr/0003-claude-code-hook-interface.md). Key findings: a hook `deny` holds in every permission mode, but a crashed or timed-out hook lets the action through unless `onFailure: block` is set, which needs Claude Code 2.1.295 and this machine has 2.1.276 (PL)
+- [ ] **P2.6** Claude Code hooks that emit events and call `agentctl check` before risky tools, in **log-only mode** first. The hook builds the `Action` from the real tool call and tracks what the session has seen (untrusted content, private data). Design decisions are in [ADR 0003](adr/0003-claude-code-hook-interface.md), including a `ConfigChange` hook that protects the hook configuration (PL)
 - [ ] **P2.6b** End-to-end test that a lie in the agent's own description of an action cannot change the decision, and that a missing exposure report is caught (threat model T-3, RT-03) (PS)
+- [ ] **P2.6c** Run the open-question experiments listed in ADR 0003 on the installed Claude Code and update the ADR: exit-code behaviour on this version, `ask` in a `-p` session, the `MultiEdit`, `NotebookEdit` and MCP payloads, whether `ConfigChange` blocks the agent's own edits to hook settings, whether `deny` holds under `bypassPermissions`, hook start-up latency, and the Windows shell (threat model T-11, RT-18 to RT-20) (PL, PS)
 - [ ] **P2.7** Approval flow: decision cards, park and resume, attributed approvals, four-eyes for no-go zones, timeouts that never auto-approve, and human override and stop controls (PL, PS)
 - [ ] **P2.7a** Precedents: record every human decision, and when the same decision type is approved repeatedly (start with three) propose a policy change through a normal policy pull request. Agents never edit policy (PS, ME)
 - [ ] **P2.7b** Notification channels for decision cards: a twice-daily digest for non-urgent items, push for urgent ones, and an "ask me later" action, all through the same gate API (PL)
@@ -81,7 +82,7 @@ Goal: every action is logged, risky actions are stopped, humans can approve with
 - [ ] **P2.9** Agent identities and "on behalf of" fields; credential broker stub with short-lived, task-scoped credentials issued only for an approved task (PS)
 - [ ] **P2.9a** Authenticate `role` and `agent_id` so a caller cannot claim another role (threat model gap G1, RT-08). Must be done before the gate is switched to enforcing (PS)
 - [ ] **P2.9b** Sign ledger events so a forged append is detectable (threat model gap G4, RT-12) (PS)
-- [ ] **P2.10** Review the log-only data (how often would the gate have blocked, how many overrides), tune thresholds, then switch to enforcing (PS, FO)
+- [ ] **P2.10** Review the log-only data (how often would the gate have blocked, how many overrides), tune thresholds, then switch to enforcing. Enforcing mode needs Claude Code 2.1.295 or later for `onFailure: block`, and P2.9a must be done first (PS, FO)
 - [ ] **P2.11** Start the small red-team suite and the eval skeleton (formalised in phase 6) (PS, ME)
 
 - [ ] **P2.12** Redact secrets and personal data before anything is written to the ledger or a decision card; scan tool input and output (threat model T-5) (PS, PL)
