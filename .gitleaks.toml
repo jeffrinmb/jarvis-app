@@ -1,0 +1,11 @@
+title = "jarvis-app gitleaks configuration"
+
+[extend]
+useDefault = true
+
+# Allowlist fake values here only when a test or example genuinely needs a string that looks
+# like a secret, and say why. Never allowlist a real secret: rotate it and remove it instead.
+#
+# [[allowlists]]
+# description = "Fake token used by the redaction test"
+# paths = ['''tests/test_redaction\.py''']

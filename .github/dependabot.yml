@@ -1,0 +1,25 @@
+version: 2
+
+# Weekly update pull requests. Because the workflow pins actions to commit SHAs, Dependabot
+# is what keeps those pins current. Every update still has to pass CI before it can merge.
+# gitleaks is pinned by hand in .github/workflows/ci.yml (version and SHA-256 together).
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps"

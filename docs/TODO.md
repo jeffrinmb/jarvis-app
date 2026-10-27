@@ -42,7 +42,8 @@ Goal: stable contracts before any component is built.
 - [x] **P1.2** Define schemas with validation: event, task, decision card, policy rule, tool registry entry, wiki frontmatter, trust label, `project.yaml`, `tiers.yaml` (PL, PS)
 - [x] **P1.3** Schema tests with fixtures, including invalid cases; example files are validated by the tests (PL)
 - [x] **P1.4** Schema versioning policy and changelog: [docs/schema-changelog.md](schema-changelog.md); tests fail if a schema is missing from it or the version table is wrong (PL)
-- [ ] **P1.5** CI on every change: lint, unit tests, schema checks, secret scan, dependency allowlist check. _Lint, format check, tests and the schema drift test run on Linux and Windows; secret scan, dependency allowlist check and action SHA pinning are still to do._ (PL)
+- [x] **P1.5** CI on every change: lint, format check, tests and the schema drift test on Linux and Windows; a `secret-scan` job (gitleaks over the full history, version and SHA-256 pinned); every action pinned to a commit SHA; Dependabot for actions and Python packages; static tests guard all of this (`tests/test_ci_workflow.py`). _The secret-scan job is untested until its first CI run._ (PL)
+- [ ] **P1.5a** Dependency allowlist and existence check, as a defence against invented or typo-squatted packages. Overlaps P4.11 (PS)
 - [ ] **P1.6** ADR template and the first ADRs (storage, schema versioning, trace conventions). _Template and ADR 0001 done; schema versioning and trace conventions ADRs still to do._ (FO)
 - [x] **P1.7** Map the OWASP agentic risks (ASI01 to ASI10) to controls and red-team cases as a threat-model document: [docs/threat-model.md](threat-model.md), with 17 red-team cases and a test that checks every cited test exists (PS)
 
