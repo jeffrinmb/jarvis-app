@@ -41,7 +41,7 @@ Goal: stable contracts before any component is built.
 - [x] **P1.1** Create the skeleton: `src/jarvis/` (core and adapters stubs), `packs/`, `viz/`, `docs/`; layout decided in ADR 0001 (PL)
 - [x] **P1.2** Define schemas with validation: event, task, decision card, policy rule, tool registry entry, wiki frontmatter, trust label, `project.yaml`, `tiers.yaml` (PL, PS)
 - [x] **P1.3** Schema tests with fixtures, including invalid cases; example files are validated by the tests (PL)
-- [ ] **P1.4** Schema versioning policy and changelog (additive changes only; breaking changes bump the version). _Policy is written in `schemas/common.py`; the changelog is still to do._ (PL)
+- [x] **P1.4** Schema versioning policy and changelog: [docs/schema-changelog.md](schema-changelog.md); tests fail if a schema is missing from it or the version table is wrong (PL)
 - [ ] **P1.5** CI on every change: lint, unit tests, schema checks, secret scan, dependency allowlist check. _Lint, format check, tests and the schema drift test run on Linux and Windows; secret scan, dependency allowlist check and action SHA pinning are still to do._ (PL)
 - [ ] **P1.6** ADR template and the first ADRs (storage, schema versioning, trace conventions). _Template and ADR 0001 done; schema versioning and trace conventions ADRs still to do._ (FO)
 - [ ] **P1.7** Map the OWASP agentic risks (ASI01 to ASI10) to controls and red-team cases as a threat-model document (PS)

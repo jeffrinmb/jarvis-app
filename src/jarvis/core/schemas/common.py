@@ -2,7 +2,8 @@
 
 Versioning policy (task P1.4): every top-level document carries ``schema_version``.
 Additive changes (new optional fields, new enum values) keep the version. Removing or
-renaming a field, or changing its meaning, bumps the version and needs an ADR.
+renaming a field, or changing its meaning, bumps the version and needs an ADR. The full
+policy and the changelog are in docs/schema-changelog.md.
 """
 
 from __future__ import annotations
