@@ -15,11 +15,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # ubuntu-latest is migrating from 24.04 to 26.04 (rollout Oct 19 to Nov 19, 2026).
+        # Test both explicitly; drop ubuntu-24.04 after the migration finishes.
+        os: [ubuntu-24.04, ubuntu-26.04, windows-latest]
         python: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: Install uv
@@ -34,4 +36,5 @@ jobs:
         run: uv run pytest
 
 # TODO (see docs/TODO.md P1.5): add secret scanning and a dependency allowlist
-# check, and pin the actions above to commit SHAs.
+# check, and pin the actions above to commit SHAs (checkout v7.0.1, setup-python v7.1.0
+# were the latest releases and run on Node 24 when this was written).
