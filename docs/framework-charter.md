@@ -1,6 +1,6 @@
 # Agentic SDLC Framework: Charter
 
-Status: **Draft v0.2** · Date: 2026-10-27 · Owner: _to be named_ · Reviewers: _security, platform, engineering leads_
+Status: **Draft v0.2.1 (verification pass applied)** · Date: 2026-10-27 · Owner: _to be named_ · Reviewers: _security, platform, engineering leads_
 
 Changes in v0.2: added the major-decisions-only flow with a sample policy (4.1), council patterns (4.2), expanded brownfield onboarding (5.8) and the learning loop (5.9), memlog and Obsidian notes (7.1), the visual layer (8.13), the alternatives landscape and BMAD compatibility (13.1-13.2), build operations (14), and configuration samples (15).
 
@@ -22,10 +22,10 @@ Evidence notes: most external guidance below comes from vendor and practitioner 
 
 ## 2. Principles
 
-1. **Simplest thing that works.** Prefer a single LLM call, then a fixed workflow, then an agent, then multiple agents. Add complexity only when evals show it helps. **[S]** (Anthropic's guidance on workflows vs. agents)
+1. **Simplest thing that works.** Prefer a single LLM call, then a fixed workflow, then an agent, then multiple agents. Add complexity only when evals show it helps. **[P]** (Anthropic, "Building effective agents": use the simplest solution possible and add complexity only when it demonstrably improves outcomes)
 2. **Deterministic first.** Code, AST, linters, tests and CI answer what they can before any model is called. **[O]**
 3. **Enforce in code, not in prompts.** Boundaries, gates, budgets and approvals are enforced by services the model cannot bypass. Prompts express intent only. **[O]**
-4. **Least agency.** Minimum permissions and minimum autonomy per role. **[S]** (OWASP agentic guidance)
+4. **Least agency.** Minimum permissions and minimum autonomy per role. **[O]** (Secondary summaries attribute "least agency" to OWASP's agentic guidance; OWASP's published announcement does not state it as a named principle, and the full document has not been read.)
 5. **Assume injection will succeed.** Design so a hijacked agent cannot cause serious harm. **[O]**
 6. **Humans own accountability.** Every action maps to a named human or team; agents never self-approve. **[O]**
 7. **Learn through artifacts.** Prefer turning a mistake into a test, lint rule, hook or CI check over adding prose to memory. **[O]**
@@ -35,7 +35,7 @@ Evidence notes: most external guidance below comes from vendor and practitioner 
 
 ### 2.1 Adoption test for upstream ideas (BMAD, nebula, others)
 
-An idea is adopted only if it: (a) solves a requirement we have; (b) is enforceable in code; (c) is cheap in tokens; (d) is stable and portable; (e) still works if the upstream disappears. Where text or code is reused closely, record the source and check its licence first. nebula is MIT; BMAD's licence was not confirmed.
+An idea is adopted only if it: (a) solves a requirement we have; (b) is enforceable in code; (c) is cheap in tokens; (d) is stable and portable; (e) still works if the upstream disappears. Where text or code is reused closely, record the source and check its licence first. nebula and BMAD are both MIT-licensed (BMAD: BMad Code, LLC, 2025). The MIT licence does not grant rights to BMAD's trademarks (BMad™, BMad Method™, BMad Core™), so our product must not use those names; its `TRADEMARK.md` has the rules.
 
 | Adopted concept | Source | How we implement it |
 |---|---|---|
@@ -154,7 +154,7 @@ A council is several agents or models deliberating on one decision. It costs sev
 | Pattern | How it works | Best for |
 |---|---|---|
 | **Role council** | Architect, Security, QA, Performance/Cost and Product each review the artifact from their own angle | Design and high-risk PR review |
-| **Model council** | Several models answer independently, then rank each other's answers anonymously, then a chair model synthesises. This is the pattern from Karpathy's `llm-council` project **[S]** | Hard design questions where model diversity helps |
+| **Model council** | Several models answer independently, then rank each other's answers anonymously, then a chair model synthesises. This is the pattern from Karpathy's `llm-council` project (verified on its README: first opinions, review with identities hidden, then a chairman model compiles the answer; the author calls it an unsupported weekend hack, so treat it as a design reference only) **[P]** | Hard design questions where model diversity helps |
 | **Debate** | One agent argues for and one against; a judge decides | Trade-off decisions |
 
 **Rules**
@@ -235,6 +235,7 @@ Each phase lists the AI role, default tier, controls, and metrics.
   6. **Safety net:** characterization tests (below) around an area before any agent changes it.
   7. **Baseline:** record cycle time, defect rate, build time and cost before agents start, so improvement can be shown.
   8. **Start read-only:** brownfield tool sets begin read-only and widen as trust builds.
+- **Ideas confirmed from BMAD's existing-codebase guide (read in full):** check for maintained context (`AGENTS.md`, `CLAUDE.md`, editor rules) and create it if missing or stale; **archive old greenfield planning documents out of reach** so routine changes do not pick up outdated context; ground planning in the existing project; scope by size (small change, a sliced epic, or a project); let the build step investigate the repository first and record what to reuse and leave alone; **make deliberate pattern changes explicit in the spec** with the reason, so later sessions follow the new rule instead of leaving two standards. Its stated warnings: over-planning produces documents nobody reads, and changing one file without the rest creates two standards with no record of which wins. **[P]**
 - **Characterization tests before any change;** verify them by deliberately breaking the code (modules that stay green are not ready). **[S]**
 - **Strangler pattern** with small slices, one intent per slice, one PR per job, traffic shifts in stages, and legacy retired only after a stable cycle at full traffic. **[S]**
 - **Triage first.** Retire systems that carry debt but little value. AI cannot recover undocumented business rules or make architecture decisions: escalate those. **[S]**
@@ -282,7 +283,9 @@ Rules: agents write only to the inbox; promotion needs validation; every note ca
 ### 7.2 Graph index
 Nodes: requirement, story, ADR, component, file/symbol, test, PR, incident, lesson, agent, approver. Edges: `implements`, `depends_on`, `decided_by`, `supersedes`, `caused_by`, `fixed_by`, `violates`, `tested_by`, `approved_by`, `learned_from`. Built deterministically from code and wikilinks where possible; derived index is rebuildable from the vault (vault is the source of truth). Retrieval is hybrid (vector candidates, then 1-2 graph hops, capped).
 
-### 7.3 Context engineering rules **[S]**
+### 7.3 Context engineering rules **[P]**
+
+Verified against Anthropic's engineering post on context engineering. Its framing: context is a finite resource with diminishing returns ("attention budget"), and recall degrades gradually as context grows (context rot). The aim is the smallest set of high-signal tokens.
 - **Just-in-time retrieval:** keep identifiers (paths, links, note names) and load content on demand; small always-on core.
 - **Tool-result clearing:** drop raw tool output once processed.
 - **Compaction:** tune for recall first, then precision; over-aggressive summaries drop details needed later.
@@ -321,7 +324,22 @@ Nodes: requirement, story, ADR, component, file/symbol, test, PR, incident, less
 - Secret scanning on tool input and output; redact before logging.
 
 ### 8.5 Security and injection resistance
-- **Threat model:** map each risk in the OWASP Top 10 for Agentic Applications (2026) and the LLM Top 10 to a control and a red-team case. Confirm exact risk numbering against OWASP's own document. **[S]**
+- **Threat model:** map each risk in the OWASP Top 10 for Agentic Applications (2026, published 2025-12-09) and the LLM Top 10 to a control and a red-team case. The ten names below are verified against OWASP's announcement post; the detailed descriptions and mitigations in the full document have not been read. **[P]**
+
+  | ID | Risk (OWASP name) | Primary controls in this framework |
+  |---|---|---|
+  | ASI01 | Agent Goal Hijack | Trust labels, taint tracking, quarantine, plan-then-execute |
+  | ASI02 | Tool Misuse | Tool registry, risk classes, gateway authorization, argument validation |
+  | ASI03 | Identity & Privilege Abuse | Per-component identity, short-lived task-scoped credentials, least agency (8.4) |
+  | ASI04 | Agentic Supply Chain Vulnerabilities | MCP vetting, pinned and hashed tool definitions, dependency allowlist (8.3, 8.6) |
+  | ASI05 | Unexpected Code Execution | Sandboxed worktrees, install scripts disabled, egress allowlist |
+  | ASI06 | Memory & Context Poisoning | Inbox write gate, trust levels, human approval for behaviour-changing lessons (7.1) |
+  | ASI07 | Insecure Inter-Agent Communication | Typed message schemas, scoped shared memory, authenticated components (8.8) |
+  | ASI08 | Cascading Failures | Budgets, loop breakers, park-and-resume, kill switch, progressive delivery |
+  | ASI09 | Human-Agent Trust Exploitation | Evidence-based decision cards, risk-weighted review, override-rate tracking (4, 4.1) |
+  | ASI10 | Rogue Agents | Anomaly rules, plan-deviation rejection, per-agent identity, kill switch |
+
+  The control column is our mapping, not OWASP's. ASI09 matters for HITL design: a confident explanation can lead a human to approve a harmful action, so decision cards show evidence and not just the agent's narrative.
 - **Trust labels** on every context source (`trusted | internal | untrusted`); untrusted sources include tickets, external PRs, third-party code and READMEs, web pages, emails, logs, tool descriptions and outputs, and poisoned memory.
 - **Taint tracking:** once untrusted data enters a session it is marked tainted and the policy tightens.
 - **Lethal-trifecta rule:** never combine private-data access, exposure to untrusted content and an external communication path in one session. If unavoidable, gate the outbound step.
@@ -337,13 +355,14 @@ Nodes: requirement, story, ADR, component, file/symbol, test, PR, incident, less
 - SBOM, SLSA-style provenance, AI-contribution commit trailers; disable install scripts in agent sandboxes; isolate build credentials from agent sessions.
 
 ### 8.7 Observability and audit
-- **Two layers, one trace ID.** (1) Operational: OpenTelemetry GenAI traces (model-call spans, agent spans with nested tool calls, MCP spans), W3C `traceparent` propagation, prompt/completion content opt-in and by reference. (2) Evidential: append-only, hash-chained audit log anchored in Git or write-once storage. **[S]** The OTel GenAI conventions were partly experimental at last check; verify status and attribute names at the official spec. Choose OTel GenAI or OpenInference deliberately.
+- **Two layers, one trace ID.** (1) Operational: OpenTelemetry GenAI traces (model-call spans, agent spans with nested tool calls, MCP spans), W3C `traceparent` propagation, prompt/completion content opt-in and by reference. (2) Evidential: append-only, hash-chained audit log anchored in Git or write-once storage. **[P]** Verified: the OpenTelemetry GenAI semantic conventions have status **Development** (not stable) and now live in the `open-telemetry/semantic-conventions-genai` repository (the old docs page only points there). A claim found elsewhere that they reached a stable specification is not supported. Agent spans use `gen_ai.operation.name` = `invoke_agent` (span kind `CLIENT` for a remote agent, `INTERNAL` in-process); the repo also covers MCP and A2A conventions. Content attributes (`gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.tool.definitions`) are **opt-in** and may contain PII. Not confirmed: the `OTEL_SEMCONV_STABILITY_OPT_IN` guidance and the `execute_tool` span details. Because the status is Development, pin a convention version and wrap attribute names behind our own schema so renames do not break us. Choose OTel GenAI or OpenInference deliberately.
 - Each audit record: agent, on-behalf-of human, task, tool and version, redacted args, result hash, risk class, policy decision and version, approver, tokens, duration, outcome, model ID, prompt version, memory snapshot, retrieved context IDs (so a decision can be explained and replayed).
 - Denied and failed calls are logged. Access reviews and anomaly alerts run periodically. Retention and access controls are defined; secrets and PII are redacted.
 
 ### 8.8 Multi-agent discipline **[S]**
 - Start with one agent or a fixed workflow. Add an agent only if it parallelises something a single context cannot handle. "It seemed like a clean separation of concerns" is a signal to consolidate.
-- Published failure studies attribute a large share of failures to inter-agent misalignment and inconsistent shared state; coordination cost grows with team size.
+- The MAST study ("Why Do Multi-Agent LLM Systems Fail?", arXiv 2503.13657; 1,600+ annotated traces across 7 frameworks; 14 failure modes in three categories) reports roughly **44% system design issues, 32% inter-agent misalignment and 24% task-verification failures** (the paper's per-mode percentages, summed by us; the denominator is not explicitly defined). A 36.9% inter-agent figure quoted in a secondary source was not found in the paper. Takeaways: design and verification failures outweigh coordination ones, so give every agent an explicit spec and a verification step. **[P]**
+- Coordination cost grows with team size (practitioner guidance **[S]**).
 - Use explicit, role-aware message schemas (intent, inputs, expected outputs); pass structured briefings with pointers to source documents, not raw transcripts; scope shared memory (read-only vs. write).
 - Patterns in use: orchestrator-workers (subtasks decided by the orchestrator), evaluator-optimizer (clear evaluation criteria), routing, parallelisation, prompt chaining.
 
@@ -360,8 +379,11 @@ Nodes: requirement, story, ADR, component, file/symbol, test, PR, incident, less
 
 ### 8.11 Governance, compliance and measurement
 - **Accountability:** RACI per stage and gate; approvals are attributed and signed (SSO identity; signed commits for high-risk gates); `policy.yaml` changes go through PR with CODEOWNERS; agents may propose policy changes but never apply them.
-- **Oversight capabilities (EU AI Act Art. 14 as a reference):** understand, monitor, intervene, halt. Logging and retention (Arts. 12 and 26 as references). NIST AI RMF (Govern, Map, Measure, Manage) and ISO/IEC 42001 are voluntary mappings. Whether this framework or the systems built with it fall under "high-risk" depends on use; **compliance owners must decide**, and the applicable dates must be verified in the official text (sources disagree). **[S]**
-- **Measure honestly.** A randomized trial in 2025 (16 experienced developers, 246 tasks) found developers took longer with AI while believing they were faster; it used early-2025 tools and a small sample, so do not extrapolate, but do **measure rather than trust perception**. DORA's AI capabilities work argues gains depend on foundational systems more than on tools. **[S]**
+- **Oversight capabilities (EU AI Act, article text read on artificialintelligenceact.eu):** Art. 14(4) requires that overseers can understand and monitor the system, stay aware of automation bias (over-relying on output), interpret outputs, decide not to use it or to disregard, override or reverse its output, and intervene or halt it through a "stop" button or similar procedure that brings it to a safe state. Art. 12 requires automatic event logging over the system's lifetime for traceability, risk identification, post-market monitoring and deployer monitoring. Art. 26(6) requires deployers to keep automatically generated logs they control for **at least six months** unless other law sets a different period. We adopt these as design references (override and stop controls, automation-bias metrics, log retention of at least six months). **[P]**
+- **Dates:** the Digital Omnibus on AI (Regulation (EU) 2026/1744, reported as published 2026-07-24 and in force 2026-07-27) moves high-risk obligations to **2 December 2027 (Annex III) and 2 August 2028 (Annex I)**; Article 50 transparency was not postponed (with a limited grace period for machine-readable marking). This is consistent across several law-firm and news sources and the article pages, but the EUR-Lex text could not be retrieved, so confirm with your compliance team. **[S]**
+- **NIST AI RMF** is voluntary; AI RMF 1.0 dates from 2023-01-26 and is being revised under the White House AI Action Plan; the Generative AI Profile is NIST AI 600-1 (2024-07-26). ISO/IEC 42001 is a related management-system standard (not re-checked). Whether this framework or the systems built with it fall under "high-risk" depends on use; **compliance owners must decide**. **[P]**
+- **Measure honestly.** METR's 2025 randomized trial (16 experienced developers, 246 issues, mostly Cursor Pro with Claude 3.5/3.7 Sonnet) measured **19% longer** completion with AI, while developers had predicted a 24% speedup and afterwards still believed about 20%. METR lists its own caveats (small sample, possible selection bias, self-reported times, early-2025 tools, one setting) and says the results are out of date; its February 2026 post says it is redesigning the experiment because of selection effects, and a May 2026 survey (349 workers, self-reported 1.4-2x) is not a controlled study. So there is **no current controlled evidence in either direction**: measure our own outcomes and not perception. **[P]**
+- **DORA's 2025 AI Capabilities Model** names seven capabilities that amplify AI's benefits: a clear and communicated AI stance, healthy data ecosystems, AI-accessible internal data, strong version control, working in small batches, a user-centric focus, and quality internal platforms. Several map directly onto this charter (small slices per PR, version control and worktrees, accessible internal data via the wiki, a stated AI policy). Use them as an adoption-readiness checklist per team. **[P]** (names from DORA and Google Cloud pages; the full report was not read)
 - Baseline before the pilot. Track: lead time, change-failure rate, time to restore, cycle time, tokens and cost per merged PR, rework rate, acted-upon rate of AI review comments, escalation rate and override rate, repeat-mistake rate, defect escape rate, attack success rate, time spent in human review.
 
 ### 8.12 Harness and model portability **[O]**
@@ -439,30 +461,30 @@ Do not start with the council, router or 3D world: they depend on the ledger and
 6. Observability convention: OTel GenAI vs. OpenInference.
 7. Durable execution engine timing (own store vs. LangGraph-style vs. Temporal).
 8. Compliance scope and applicable regulatory dates (compliance owner).
-9. Licence check for any reused upstream text or code (BMAD licence unconfirmed).
+9. Licence handling for reused upstream text or code: BMAD and nebula are MIT; BMAD's trademarks are excluded from the MIT grant; the `llm-council` repository's licence is not stated on its page and its author says it is unsupported, so do not reuse its code.
 10. Data policy: which models may see which repos.
 11. Which content pack(s) to ship first (BMAD-style, Spec Kit, OpenSpec) and whether importers are needed on day one.
 12. Whether the visual layer is a 2D timeline only for the pilot, with 3D deferred.
 
 ## 13. Reference designs reviewed
 
-- **BMAD-METHOD** (methodology; skills and a Python state layer). Read: README, `AGENTS.md`, selected skills (`bmad-project-context`, `bmad-eval`, `bmad-party-mode`, `bmad-build-auto`, `bmad-code-review` entry), `tools/ticket-tree-rules.md`. Not read: persona definitions, code-review reviewer layers, build workflow steps, `docs/existing-codebases/`. v7 is alpha.
+- **BMAD-METHOD** (methodology; skills and a Python state layer). Read: README, `AGENTS.md`, selected skills (`bmad-project-context`, `bmad-eval`, `bmad-party-mode`, `bmad-build-auto`, `bmad-code-review` entry), `tools/ticket-tree-rules.md`. Also read: `docs/existing-codebases/start-in-an-existing-codebase.md` and the `LICENSE` (MIT, BMad Code, LLC; trademarks excluded). Not read: persona definitions, code-review reviewer layers, build workflow steps, the other three `existing-codebases` docs, and the `.memlog.md` format. v7 is alpha.
 - **nebula** (Rust TUI/daemon supervising agent CLIs; MIT; work in progress). Read: README, `ARCHITECTURE.md`, `docs/how-it-works.md`, `docs/orchestrator.md`, `docs/configuration.md`. No memory, routing, policy engine, MCP, or injection defences in what was read.
 
 ### 13.1 Landscape of alternatives and how we relate to them
 
-We build a governance and memory layer, and we compose with, not replace, spec and agent tooling. Status notes come from secondary sources found in October 2026; verify each project before depending on it.
+We build a governance and memory layer, and we compose with, not replace, spec and agent tooling. Features below were checked against each project's own repository or docs in October 2026 unless marked; versions and counts change quickly, so re-check before depending on any project.
 
 | Tool | What it is | Relation to this framework |
 |---|---|---|
-| **GitHub Spec Kit** | Open-source (MIT) spec-first toolkit: constitution, specify, plan, tasks, implement; works across many coding agents. Official history reports v1.0.0 on 2026-08-21 **[S]** | Candidate **content pack** for the spec phase; light, harness-neutral. No policy, memory or audit layer |
-| **Kiro (AWS)** | Spec-driven IDE: requirements (EARS-style) → design → tasks, steering files in `.kiro/steering/`, event-driven hooks **[S]** | A product, not a portable method; a source of ideas (steering, hooks). Adopt concepts only |
-| **OpenSpec** | Specs in `openspec/specs/`, per-change folders in `openspec/changes/` with proposal, requirement deltas and tasks, archived on completion; brownfield focus; MIT **[S]** | Strong fit for **change-by-change brownfield** work; its "change proposal and archive" idea maps onto our task and ADR records |
+| **GitHub Spec Kit** | Open-source (MIT) spec-first toolkit: `/speckit-constitution`, `-specify`, `-plan`, `-tasks`, `-implement`, plus `-converge` after implement; guides for existing projects. The official project history reports v1.0.0 on 2026-08-21, 38 agent integrations, 157 community extensions, 33 presets, 270+ contributors (a snapshot) **[P]** | Candidate **content pack** for the spec phase; light, harness-neutral. No policy, memory or audit layer |
+| **Kiro (AWS)** | Spec-driven tool (IDE, CLI and web): `requirements.md` (or `bugfix.md`), `design.md`, `tasks.md`; requirements-first or design-first variants; a "Quick Spec" mode without approval gates; independent tasks run in dependency-based parallel "waves". The docs page does not mention EARS, and steering and hooks are linked but were not read **[P]** | A product, not a portable method; a source of ideas (steering, hooks, parallel task waves). Adopt concepts only |
+| **OpenSpec** | MIT; `openspec/specs/` (current behaviour) and `openspec/changes/<name>/` (`proposal.md`, `specs/`, `design.md`, `tasks.md`), archived to `openspec/changes/archive/` on completion; `/opsx:*` commands; 30+ assistants; "built for brownfield not just greenfield". Version not stated on the page **[P]** | Strong fit for **change-by-change brownfield** work; its "change proposal and archive" idea maps onto our task and ADR records |
 | **Tessl** | Spec-as-source-of-truth approach (reported as more experimental) **[S]** | Watch only |
 | **MetaGPT / ChatDev** | Simulated software-company multi-agent frameworks | Useful for prototypes; weak on human gates, audit and brownfield; heavier on tokens |
 | **CrewAI, AutoGen, LangGraph, OpenAI Agents SDK** | General agent orchestration libraries | Possible runtime for our orchestrator; LangGraph-style interrupt and checkpoint fits park-and-resume (8.9) |
 | **Claude Code subagents, skills, hooks, plugins** | Native roles, commands, hooks and headless mode | First harness and adapter target |
-| **Autonomous agents (Devin, OpenHands, Copilot coding agent, Jules)** | Ticket in, PR out | Tier-2 workers behind our gate; control comes from our PR and CI gates **(from general knowledge; not re-verified)** |
+| **Autonomous agents** | **Devin**: autonomous engineer reached from Slack/Teams, web, CLI, API, Linear or Jira; opens PRs (drafts); no formal approval gate described. **GitHub Copilot cloud agent** (renamed from "coding agent"): works in an ephemeral cloud environment, creates the branch and PR, limited to one repository per run, 59-minute session timeout, can be blocked by rulesets. **Jules** (Google, experimental): VM per task, reads `AGENTS.md`, generates a plan you approve before code changes. **OpenHands** (MIT): now positioned as a self-hosted "control center" that runs its own agent or third-party agents (Claude Code, Codex, Gemini CLI) with webhook and scheduled automations **[P]** | Tier-2 workers behind our gate. **OpenHands overlaps our orchestrator and control-plane role**, so evaluate it as a runtime or as a design reference before building our own. Our control comes from our PR, CI and policy gates |
 
 **Choosing a content pack per project:** full lifecycle with personas (BMAD-style); lightest spec loop (Spec Kit); existing codebase, change by change (OpenSpec); an IDE-integrated workflow (Kiro). The framework's core stays the same; the pack is replaceable.
 
@@ -537,20 +559,30 @@ supersedes: []
 
 ## 16. Evidence and verification status
 
-Sources are mostly vendor or practitioner material. Items to verify against primary documents before they become hard requirements:
+A verification pass against primary sources was run on 2026-10-27. Results:
 
-| Item | Verify at |
-|---|---|
-| OWASP agentic risk list and numbering | OWASP GenAI Security Project (primary document) |
-| OTel GenAI convention status (stable vs. experimental) and attribute names | OpenTelemetry semantic conventions spec |
-| Anthropic context-engineering and agent guidance (read only via summaries) | Anthropic Engineering primary posts |
-| EU AI Act applicability, articles and dates; NIST AI RMF mapping | EUR-Lex; NIST; internal compliance |
-| Specific numbers (false-positive rates, kill-rate targets, calibration set size, MTTR, cost savings, failure-mode percentages, the 18% MCP scoping statistic) | Treat as indicative only |
-| DORA seven capabilities (only the landing page was read) | DORA report |
-| METR study details (secondary reports) | METR primary report |
-| Spec Kit, Kiro, OpenSpec, Tessl status and features (secondary blogs; Spec Kit v1.0.0 date from a search summary of the official history) | Each project's own repository or docs (kiro.dev, github.com/Fission-AI/OpenSpec, GitHub spec-kit) |
-| Council pattern (anonymised peer ranking and chair synthesis) | karpathy/llm-council repository README |
-| Autonomous agent products (Devin, OpenHands, Copilot coding agent, Jules) | Vendor docs; not re-checked in this review |
+| Item | Result | Status |
+|---|---|---|
+| OWASP agentic risk list | Ten names ASI01-ASI10 confirmed on OWASP's announcement post (published 2025-12-09). The post does not state "least agency" or identity mitigations; the full document was not read | Names verified; detail and "least agency" attribution **not verified** |
+| OTel GenAI conventions | Status is **Development**, not stable; moved to `open-telemetry/semantic-conventions-genai`; `invoke_agent` and opt-in content attributes confirmed. The claim of a stable spec is unsupported | Verified; `OTEL_SEMCONV_STABILITY_OPT_IN` and `execute_tool` details **not confirmed** |
+| Anthropic context engineering | Recall-first compaction, tool-result clearing, note-taking, just-in-time retrieval, sub-agents returning condensed summaries (about 1,000-2,000 tokens) confirmed in the primary post | Verified |
+| Anthropic "Building effective agents" | Five workflow patterns (prompt chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer) and the simplicity advice confirmed. The "six patterns" claim from one secondary source is wrong | Verified |
+| EU AI Act Arts. 12, 14, 26 | Text read on artificialintelligenceact.eu (see 8.11), including the six-month minimum log retention | Verified against a text-reproduction site; EUR-Lex not retrieved |
+| EU AI Act dates | Digital Omnibus (Reg. (EU) 2026/1744) moves high-risk to 2027-12-02 (Annex III) and 2028-08-02 (Annex I); the older "August 2026" figure is superseded. An older law-firm update still describes a provisional deal | Consistent across multiple secondary sources; **confirm on EUR-Lex with compliance** |
+| NIST AI RMF | Voluntary; v1.0 (2023-01-26) under revision; GenAI Profile AI 600-1 (2024-07-26); the four functions appear only in an image caption on the page | Verified |
+| DORA seven capabilities | Seven names confirmed from DORA and Google Cloud pages (listed in 8.11) | Names verified; full report not read |
+| METR trial | 16 developers, 246 issues, 19% slower, 24% predicted, about 20% post-hoc belief confirmed; METR says results are out of date and is redesigning the study | Verified |
+| MAST multi-agent failures | Paper, 1,600+ traces, 14 modes, three categories confirmed; shares are about 44% / 32% / 24%. **The 36.9% figure was not found** | Corrected in 8.8 |
+| MCP "18% of deployments scope tool permissions" | Not found in the page it was attributed to | **Unverified; do not use** (not used in this charter) |
+| Spec Kit | MIT; commands; v1.0.0 on 2026-08-21 with 38 integrations, 157 extensions, 33 presets, 270+ contributors confirmed on the official history page; latest version beyond that not confirmed | Verified (snapshot) |
+| Kiro | `requirements.md`/`bugfix.md`, `design.md`, `tasks.md`; IDE, CLI and web; EARS not mentioned on the page; steering and hooks not read | Partly verified |
+| OpenSpec | MIT; layout and commands confirmed; version not stated | Verified |
+| llm-council | Three stages confirmed; author calls it an unsupported "fun Saturday hack"; licence not stated on the visible page; how anonymisation is implemented is not described | Verified; **do not reuse code** |
+| BMAD licence and brownfield doc | MIT (BMad Code, LLC, 2025), trademarks excluded; `start-in-an-existing-codebase.md` read in full | Verified |
+| Devin, Copilot cloud agent, Jules, OpenHands | Features in 13.1 read from vendor docs; Copilot's page does not describe a human-approval requirement for workflows | Verified (vendor docs) |
+| Tessl, MetaGPT, ChatDev, CrewAI, AutoGen, LangGraph, OpenAI Agents SDK, ISO/IEC 42001 | Not re-checked | **Unverified** |
+| Practitioner numbers: AI-review false-positive rates (5-15%), mutation kill-rate target (80%), judge calibration set (50-200), MTTR reductions, cost-saving percentages, incident-volume threshold (3-5 a month) | Vendor or practitioner guidance with no primary source found | **Indicative only; treat as starting points to tune** |
+| Source-quality caveat | Most security, supply-chain, eval, SRE and cost guidance is vendor or practitioner material (tagged [S] in the text) | Check before making any of it a hard requirement |
 
 ### Sources
 
@@ -575,4 +607,6 @@ Sources are mostly vendor or practitioner material. Items to verify against prim
 - Durable execution: https://docs.langchain.com/oss/python/langgraph/durable-execution · https://temporal.io/blog/manetu-the-thread-is-the-workflow · https://rubinlake.com/en/technology-radar/ai-and-data-engineering/ignoring-durability-agent-workflows
 - Spec-driven alternatives: https://ssojet.com/blog/best-spec-driven-development-tools · https://github.github.com/spec-kit/history.html · https://kiro.dev/docs/getting-started/first-project/ · https://github.com/Fission-AI/OpenSpec · https://developertoolkit.ai/en/ecosystem/frameworks/openspec/
 - LLM council pattern: https://www.analyticsvidhya.com/blog/2025/12/llm-council-by-andrej-karpathy/ · https://virtuslab.com/blog/ai/llm-llm-council/
+- Primary sources used in the 2026-10-27 verification pass: OWASP announcement https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/ · OTel GenAI repo https://github.com/open-telemetry/semantic-conventions-genai · Anthropic context engineering https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents · EU AI Act articles https://artificialintelligenceact.eu/article/12/ , /article/14/ , /article/26/ · NIST https://www.nist.gov/itl/ai-risk-management-framework · METR https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/ , https://metr.org/blog/2026-02-24-uplift-update/ , https://metr.org/blog/2026-05-11-ai-usage-survey/ · DORA https://cloud.google.com/blog/products/ai-machine-learning/introducing-doras-inaugural-ai-capabilities-model · MAST https://arxiv.org/abs/2503.13657 · Spec Kit https://github.com/github/spec-kit , https://github.github.com/spec-kit/history.html · Kiro https://kiro.dev/docs/specs/ · llm-council https://github.com/karpathy/llm-council · BMAD licence https://raw.githubusercontent.com/bmad-code-org/BMAD-METHOD/main/LICENSE and brownfield doc https://raw.githubusercontent.com/bmad-code-org/BMAD-METHOD/main/docs/existing-codebases/start-in-an-existing-codebase.md · OpenHands https://github.com/OpenHands/OpenHands · Copilot cloud agent https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent · Jules https://jules.google/docs · Devin https://docs.devin.ai/get-started/devin-intro
+- EU Digital Omnibus (secondary): https://www.gibsondunn.com/eu-ai-act-omnibus-agreement-postponed-high-risk-deadlines-and-other-key-changes/ · https://www.orrick.com/en/Insights/2026/07/EU-AI-Act-Update-Digital-Omnibus-Finalizes-8-Compliance-Changes
 - Reference repos: https://github.com/agentSystemLabs/nebula · https://github.com/bmad-code-org/BMAD-METHOD
