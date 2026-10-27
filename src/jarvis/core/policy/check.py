@@ -7,6 +7,8 @@ audited is not allowed.
 
 from __future__ import annotations
 
+from typing import Any
+
 from jarvis.core.ledger import Ledger, LedgerError
 from jarvis.core.schemas import (
     Action,
@@ -65,7 +67,15 @@ def _fail_closed(policy: Policy, action: Action, reason: str) -> Verdict:
     )
 
 
-def decision_event(action: Action, verdict: Verdict, version: str | None) -> Event:
+def decision_event(
+    action: Action,
+    verdict: Verdict,
+    version: str | None,
+    extra: dict[str, Any] | None = None,
+) -> Event:
+    """Build the audit event for a decision. ``extra`` is caller context (for example the
+    harness, session and permission mode) stored under ``data["context"]``; it must already
+    be free of secrets and file contents."""
     return Event(
         kind=EventKind.POLICY_DECISION,
         agent_id=action.agent_id,
@@ -90,6 +100,7 @@ def decision_event(action: Action, verdict: Verdict, version: str | None) -> Eve
                 {"rule_id": m.rule_id, "category": m.category, "effect": m.effect.value}
                 for m in verdict.matches
             ],
+            "context": dict(extra or {}),
         },
     )
 
@@ -101,11 +112,12 @@ def run_check(
     project: ProjectConfig | None = None,
     ledger: Ledger | None = None,
     record: bool = True,
+    extra: dict[str, Any] | None = None,
 ) -> Verdict:
     """Evaluate ``action`` and, when a ledger is given and ``record`` is true, log the verdict.
 
     With a ledger, history is read and the decision is appended under one lock, so concurrent
-    checks for the same task see each other's decisions.
+    checks for the same task see each other's decisions. ``extra`` is stored with the event.
     """
     if ledger is None:
         return evaluate(action, policy, registry, project)
@@ -117,7 +129,7 @@ def run_check(
             prior = prior_diff_lines(tx.records(), action.task_id)
             verdict = evaluate(action, policy, registry, project, prior_diff_lines=prior)
             if record:
-                tx.append(decision_event(action, verdict, version))
+                tx.append(decision_event(action, verdict, version, extra))
         return verdict
     except (LedgerError, ValueError, OSError) as exc:
         return _fail_closed(policy, action, f"audit ledger unavailable: {exc}")
