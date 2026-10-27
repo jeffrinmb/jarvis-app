@@ -20,7 +20,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -29,6 +28,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jarvis.core.filelock import LockTimeoutError, file_lock
 from jarvis.core.schemas import Event
 
 GENESIS_HASH = "0" * 64
@@ -127,43 +127,12 @@ class Ledger:
 
     @contextmanager
     def _lock(self) -> Iterator[None]:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         lock_path = self.path.with_name(self.path.name + ".lock")
-        deadline = time.monotonic() + self.lock_timeout
-        while True:
-            try:
-                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                break
-            except (FileExistsError, PermissionError) as exc:
-                # On Windows, creating a file that another writer has just deleted (still
-                # "delete pending") raises PermissionError instead of FileExistsError.
-                if time.monotonic() > deadline:
-                    raise LedgerLockError(
-                        f"could not lock {lock_path} within {self.lock_timeout}s "
-                        f"({type(exc).__name__}); if no writer is running the lock is "
-                        "stale and can be deleted"
-                    ) from None
-                time.sleep(0.02)
         try:
-            os.write(fd, str(os.getpid()).encode())
-            yield
-        finally:
-            os.close(fd)
-            self._remove_lock(lock_path)
-
-    @staticmethod
-    def _remove_lock(lock_path: Path) -> None:
-        for attempt in range(50):
-            try:
-                os.unlink(lock_path)
-                return
-            except FileNotFoundError:
-                return
-            except PermissionError:
-                # Windows: a virus scanner or another handle can briefly block deletion.
-                if attempt == 49:
-                    raise
-                time.sleep(0.02)
+            with file_lock(lock_path, self.lock_timeout):
+                yield
+        except LockTimeoutError as exc:
+            raise LedgerLockError(str(exc)) from None
 
     def _last_record(self) -> dict[str, Any] | None:
         """Read and check only the final record, so appends stay cheap."""

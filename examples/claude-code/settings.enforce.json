@@ -1,0 +1,117 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": [
+              "run",
+              "--project",
+              "${CLAUDE_PROJECT_DIR}",
+              "agentctl",
+              "hook",
+              "run",
+              "--mode",
+              "enforce"
+            ],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": [
+              "run",
+              "--project",
+              "${CLAUDE_PROJECT_DIR}",
+              "agentctl",
+              "hook",
+              "run",
+              "--mode",
+              "enforce"
+            ],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": [
+              "run",
+              "--project",
+              "${CLAUDE_PROJECT_DIR}",
+              "agentctl",
+              "hook",
+              "run",
+              "--mode",
+              "enforce"
+            ],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": [
+              "run",
+              "--project",
+              "${CLAUDE_PROJECT_DIR}",
+              "agentctl",
+              "hook",
+              "run",
+              "--mode",
+              "enforce"
+            ],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": [
+              "run",
+              "--project",
+              "${CLAUDE_PROJECT_DIR}",
+              "agentctl",
+              "hook",
+              "run",
+              "--mode",
+              "enforce"
+            ],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

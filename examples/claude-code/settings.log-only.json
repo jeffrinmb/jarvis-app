@@ -1,0 +1,92 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentctl",
+            "args": [
+              "hook",
+              "run",
+              "--mode",
+              "log-only"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentctl",
+            "args": [
+              "hook",
+              "run",
+              "--mode",
+              "log-only"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentctl",
+            "args": [
+              "hook",
+              "run",
+              "--mode",
+              "log-only"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentctl",
+            "args": [
+              "hook",
+              "run",
+              "--mode",
+              "log-only"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentctl",
+            "args": [
+              "hook",
+              "run",
+              "--mode",
+              "log-only"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

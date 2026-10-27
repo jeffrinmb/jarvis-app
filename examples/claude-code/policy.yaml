@@ -1,0 +1,52 @@
+# A starting policy for the Claude Code hook. Copy to .agents/policy.yaml and adjust.
+# The most restrictive matching rule wins; anything unmatched goes to a human.
+schema_version: 1
+version: claude-code-0.1.0
+default: human
+
+auto_approve:
+  - id: reads
+    description: Reading files, searching and read-only shell commands
+    when:
+      tools: ["fs.read", "shell.read", "claude.internal"]
+  - id: edits-in-project
+    description: Edits of up to 400 lines to source, tests and documentation
+    when:
+      tools: ["fs.write"]
+      paths: ["src/**", "tests/**", "docs/**", "examples/**", "README.md", "CONTRIBUTING.md"]
+      max_diff_lines: 400
+  - id: test-runs
+    description: Running the project's tests and linters
+    when:
+      tools: ["shell.test"]
+  - id: subagents
+    description: Starting a subagent (its own tool calls are checked separately)
+    when:
+      tools: ["agent.spawn"]
+
+council_review:
+  - id: web-access
+    description: Fetching web content can bring in untrusted instructions or send data out
+    when:
+      tools: ["web.fetch"]
+
+human_required:
+  - id: framework-and-claude-config
+    description: Policy, hook configuration, CI and dependency files decide what agents may do
+    when:
+      paths: [".agents/**", ".claude/**", ".github/**", "pyproject.toml", "uv.lock"]
+  - id: arbitrary-shell
+    description: A shell command that is not a recognised read or test command
+    when:
+      tools: ["shell.run"]
+  - id: writes-after-untrusted-content
+    description: A session that read untrusted content may not change anything without a human
+    when:
+      tainted: true
+      risk_at_least: low
+
+never:
+  - id: secrets
+    description: Agents never touch secrets, keys or environment files
+    when:
+      paths: ["**/.env", "**/.env.*", "**/secrets/**", "**/*.pem", "**/*.key", "**/id_rsa*"]
