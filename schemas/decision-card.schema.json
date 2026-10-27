@@ -1,0 +1,282 @@
+{
+  "$defs": {
+    "CouncilVote": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "member": {
+          "minLength": 1,
+          "title": "Member",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Reasons",
+          "type": "array"
+        },
+        "vote": {
+          "enum": [
+            "approve",
+            "concerns",
+            "block"
+          ],
+          "title": "Vote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member",
+        "vote",
+        "confidence"
+      ],
+      "title": "CouncilVote",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "description": "diff, test, council, cost, log, ...",
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "description": "Path, URL or event id",
+          "minLength": 1,
+          "title": "Ref",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "ref",
+        "summary"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Option": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "tradeoffs": {
+          "minLength": 1,
+          "title": "Tradeoffs",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "tradeoffs"
+      ],
+      "title": "Option",
+      "type": "object"
+    },
+    "RiskAxes": {
+      "additionalProperties": false,
+      "description": "Escalation uses any single axis crossing its threshold, never an average.",
+      "properties": {
+        "blast_radius": {
+          "enum": [
+            "one-file",
+            "service",
+            "many-services",
+            "customers"
+          ],
+          "title": "Blast Radius",
+          "type": "string"
+        },
+        "cost_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Usd"
+        },
+        "reversibility": {
+          "enum": [
+            "easy",
+            "hard"
+          ],
+          "title": "Reversibility",
+          "type": "string"
+        },
+        "risk_class": {
+          "$ref": "#/$defs/RiskClass"
+        },
+        "uncertainty": {
+          "default": "low",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Uncertainty",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reversibility",
+        "blast_radius",
+        "risk_class"
+      ],
+      "title": "RiskAxes",
+      "type": "object"
+    },
+    "RiskClass": {
+      "description": "Ordered from least to most risky; use ``rank`` to compare.",
+      "enum": [
+        "read",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskClass",
+      "type": "string"
+    },
+    "Urgency": {
+      "enum": [
+        "digest",
+        "urgent"
+      ],
+      "title": "Urgency",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "council_votes": {
+      "items": {
+        "$ref": "#/$defs/CouncilVote"
+      },
+      "title": "Council Votes",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decision": {
+      "description": "The decision needed, in one sentence",
+      "minLength": 1,
+      "title": "Decision",
+      "type": "string"
+    },
+    "default_on_timeout": {
+      "const": "stay_parked",
+      "default": "stay_parked",
+      "title": "Default On Timeout",
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "minItems": 1,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expires At"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "options": {
+      "items": {
+        "$ref": "#/$defs/Option"
+      },
+      "maxItems": 4,
+      "minItems": 2,
+      "title": "Options",
+      "type": "array"
+    },
+    "recommendation": {
+      "description": "Option id the agent recommends",
+      "minLength": 1,
+      "title": "Recommendation",
+      "type": "string"
+    },
+    "risk": {
+      "$ref": "#/$defs/RiskAxes"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "task_id": {
+      "minLength": 1,
+      "title": "Task Id",
+      "type": "string"
+    },
+    "urgency": {
+      "$ref": "#/$defs/Urgency",
+      "default": "digest"
+    }
+  },
+  "required": [
+    "id",
+    "task_id",
+    "decision",
+    "options",
+    "recommendation",
+    "confidence",
+    "evidence",
+    "risk",
+    "created_at"
+  ],
+  "title": "DecisionCard",
+  "type": "object"
+}

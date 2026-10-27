@@ -1,0 +1,42 @@
+{
+  "$defs": {
+    "Tier": {
+      "description": "Model tier requested by a role; ``tiers.yaml`` maps tiers to concrete models.",
+      "enum": [
+        "cheap",
+        "standard",
+        "strong"
+      ],
+      "title": "Tier",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Maps each tier to concrete model ids, in fallback order.",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "tiers": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/Tier"
+      },
+      "title": "Tiers",
+      "type": "object"
+    }
+  },
+  "required": [
+    "tiers"
+  ],
+  "title": "TiersConfig",
+  "type": "object"
+}

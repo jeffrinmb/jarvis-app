@@ -1,0 +1,161 @@
+{
+  "$defs": {
+    "Approval": {
+      "enum": [
+        "auto",
+        "council",
+        "human"
+      ],
+      "title": "Approval",
+      "type": "string"
+    },
+    "DataClass": {
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ],
+      "title": "DataClass",
+      "type": "string"
+    },
+    "Effect": {
+      "enum": [
+        "read-only",
+        "write-reversible",
+        "write-irreversible",
+        "external-comms"
+      ],
+      "title": "Effect",
+      "type": "string"
+    },
+    "Environment": {
+      "enum": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "title": "Environment",
+      "type": "string"
+    },
+    "RiskClass": {
+      "description": "Ordered from least to most risky; use ``rank`` to compare.",
+      "enum": [
+        "read",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskClass",
+      "type": "string"
+    },
+    "ToolEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_roles": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Allowed Roles",
+          "type": "array"
+        },
+        "approval": {
+          "$ref": "#/$defs/Approval"
+        },
+        "cost_hint": {
+          "anyOf": [
+            {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Hint"
+        },
+        "data_class": {
+          "$ref": "#/$defs/DataClass"
+        },
+        "effect": {
+          "$ref": "#/$defs/Effect"
+        },
+        "environments": {
+          "items": {
+            "$ref": "#/$defs/Environment"
+          },
+          "minItems": 1,
+          "title": "Environments",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "owner": {
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        },
+        "risk": {
+          "$ref": "#/$defs/RiskClass"
+        },
+        "source": {
+          "description": "native, cli, api or mcp:<server>",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "version": {
+          "description": "Pinned version",
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "version",
+        "risk",
+        "effect",
+        "data_class",
+        "allowed_roles",
+        "environments",
+        "approval",
+        "owner"
+      ],
+      "title": "ToolEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/ToolEntry"
+      },
+      "title": "Tools",
+      "type": "array"
+    }
+  },
+  "required": [
+    "tools"
+  ],
+  "title": "ToolRegistry",
+  "type": "object"
+}

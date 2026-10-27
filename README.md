@@ -2,7 +2,7 @@
 
 A governed, agentic framework for automating the software development lifecycle. AI agents do the work; humans decide only the major decisions; every action is auditable; token spend is budgeted; and the system learns from its mistakes.
 
-> **Status: design phase.** The charter, diagrams and roadmap exist. No framework code has been written yet. "jarvis-app" is the repository's working name.
+> **Status: early build (phases 1 and 2 started).** The charter, diagrams and roadmap exist, and the project skeleton, versioned schemas and a tamper-evident audit ledger (`agentctl log`, `verify`, `head`) are built and tested. The policy gate, approvals, memory and the rest are not built yet. "jarvis-app" is the repository's working name.
 
 ## What it is
 
@@ -83,14 +83,20 @@ More diagrams (decision routing, pipeline and gates, memory, learning loop, inje
 
 Details and task lists are in [docs/TODO.md](docs/TODO.md).
 
-## Planned repository layout
+## Repository layout
 
 ```
-core/       orchestrator, policy, council, memory, ledger, gates, tools, security, evals, agents, skills
-adapters/   harness adapters (Claude Code first)
-packs/      greenfield, brownfield, per-stack conventions
-viz/        2D timeline and 3D world
-docs/       charter, diagrams, TODO, ADRs
+src/jarvis/
+  core/       schemas and ledger (built); orchestrator, policy, council, memory,
+              gates, tools, security, evals (stubs, built in later phases)
+  adapters/   harness adapters (Claude Code first; stub)
+  cli.py      the agentctl command
+packs/        greenfield, brownfield, per-stack conventions (planned)
+viz/          2D timeline and 3D world (planned)
+schemas/      generated JSON Schemas (do not edit by hand)
+examples/     sample project, policy, tiers, tool registry and wiki note, validated by tests
+tests/        pytest suite
+docs/         charter, diagrams, TODO, ADRs
 ```
 
 Per project, in the target repository:
@@ -104,11 +110,32 @@ Per project, in the target repository:
 
 ## Getting started
 
-There is nothing to install or run yet. To contribute to the design:
+Requires Python 3.12 or newer and [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv sync
+uv run pytest
+```
+
+Try the audit ledger. Events are appended to a hash-chained file, and any edit, deletion or reordering is detected:
+
+```bash
+export JARVIS_LEDGER=/tmp/demo.jsonl
+uv run agentctl log --kind task_created --agent planner --on-behalf-of alice --task T-1
+uv run agentctl log --kind tool_call --agent builder-1 --on-behalf-of alice --task T-1 --tool-id git.read
+uv run agentctl verify
+uv run agentctl head        # prints SEQ:HASH; keep it somewhere safe, such as Git
+uv run agentctl verify --anchor SEQ:HASH
+```
+
+A ledger file cannot reveal that its tail was cut off or that the whole chain was rewritten consistently. Record an anchor (`agentctl head`) elsewhere and pass it to `verify --anchor` to detect both.
+
+To work on the design:
 
 1. Read the [charter](docs/framework-charter.md), starting with sections 2 (principles) and 4 (autonomy tiers).
 2. Pick a task from the [TODO list](docs/TODO.md) and open an issue or pull request referencing its ID (for example `P2.4`).
-3. Record notable decisions as ADRs.
+3. Record notable decisions as ADRs in `docs/adr/`.
+4. After changing a schema, regenerate the JSON Schemas with `uv run agentctl schema export --out schemas`; a test fails if they drift.
 
 ## Reference designs
 
@@ -120,4 +147,6 @@ Much of the external guidance behind the charter comes from vendor and practitio
 
 ## Licence
 
-Not yet decided (tracked as task P0.10).
+Licensed under the [Apache License, Version 2.0](LICENSE). Unless you state otherwise, any contribution you submit for inclusion is licensed under the same terms.
+
+The licence does not grant rights to third-party trademarks, including BMAD's (BMad, BMad Method, BMad Core).
