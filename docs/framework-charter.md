@@ -72,13 +72,13 @@ Clients: CLI · web · 2D timeline · 3D world · chat notifications
         Harness adapters (Claude Code first) · CI · Git · ticketing
 ```
 
-Per-project files live in `.agents/` (`project.yaml`, `policy.yaml`, `vault/`). Nothing project-specific lives in `core/`.
+Per-project files live in `.agents/` (`project.yaml`, `policy.yaml`, `vault/`). Nothing project-specific lives in `jarvis.core`.
 
 Repository layout (target):
 
 ```
-core/{orchestrator,policy,council,memory,ledger,gates,tools,security,evals,agents,skills}
-adapters/   packs/{greenfield,brownfield,stacks}   viz/   docs/
+src/jarvis/core/{schemas,ledger,orchestrator,policy,council,memory,gates,tools,security,evals}
+src/jarvis/adapters/   packs/{greenfield,brownfield,stacks}   viz/   schemas/   examples/   docs/
 ```
 
 ## 4. Autonomy tiers and human-in-the-loop
@@ -522,7 +522,7 @@ tiers:                           # role -> model tier (tiers.yaml maps tiers to 
   reviewer: standard
   council_chair: strong
   summariser: cheap
-budgets: { per_task_tokens: 400000, per_day_cost: 50 }
+budgets: { per_task_tokens: 400000, per_day_cost_usd: 50 }
 no_go_paths: ["infra/prod/**", "**/.env", "db/migrations/legacy/**"]
 tools_enabled: [git.read, git.branch, ci.run_tests, files.search, tickets.read, wiki.search]
 environments: [dev, staging]     # never prod for agents

@@ -37,12 +37,12 @@ Exit check: owners named, decisions and pilots recorded, baselines captured.
 
 Goal: stable contracts before any component is built.
 
-- [ ] **P1.1** Create the skeleton: `core/`, `adapters/`, `packs/`, `viz/`, `docs/` (PL)
-- [ ] **P1.2** Define schemas with validation: event, task, decision card, policy rule, tool registry entry, wiki frontmatter, trust label, `project.yaml`, `tiers.yaml` (PL, PS)
-- [ ] **P1.3** Schema tests with fixtures, including invalid cases (PL)
-- [ ] **P1.4** Schema versioning policy and changelog (additive changes only; breaking changes bump the version) (PL)
-- [ ] **P1.5** CI on every change: lint, unit tests, schema checks, secret scan, dependency allowlist check (PL)
-- [ ] **P1.6** ADR template and the first ADRs (storage, schema versioning, trace conventions) (FO)
+- [x] **P1.1** Create the skeleton: `src/jarvis/` (core and adapters stubs), `packs/`, `viz/`, `docs/`; layout decided in ADR 0001 (PL)
+- [x] **P1.2** Define schemas with validation: event, task, decision card, policy rule, tool registry entry, wiki frontmatter, trust label, `project.yaml`, `tiers.yaml` (PL, PS)
+- [x] **P1.3** Schema tests with fixtures, including invalid cases; example files are validated by the tests (PL)
+- [ ] **P1.4** Schema versioning policy and changelog (additive changes only; breaking changes bump the version). _Policy is written in `schemas/common.py`; the changelog is still to do._ (PL)
+- [ ] **P1.5** CI on every change: lint, unit tests, schema checks, secret scan, dependency allowlist check. _Lint, format check, tests and the schema drift test run on Linux and Windows; secret scan, dependency allowlist check and action SHA pinning are still to do._ (PL)
+- [ ] **P1.6** ADR template and the first ADRs (storage, schema versioning, trace conventions). _Template and ADR 0001 done; schema versioning and trace conventions ADRs still to do._ (FO)
 - [ ] **P1.7** Map the OWASP agentic risks (ASI01 to ASI10) to controls and red-team cases as a threat-model document (PS)
 
 Exit check: schemas validate, CI is green, threat model reviewed.
@@ -53,7 +53,8 @@ Exit check: schemas validate, CI is green, threat model reviewed.
 
 Goal: every action is logged, risky actions are stopped, humans can approve with attribution.
 
-- [ ] **P2.1** Hash-chained JSONL event log with `agentctl log` and `agentctl verify` (PL)
+- [x] **P2.1** Hash-chained JSONL event log with `agentctl log`, `verify` and `head`; single-writer lock file; anchors for truncation and rewrite detection (PL)
+- [ ] **P2.1a** Record ledger anchors outside the ledger (for example commit `agentctl head` output to Git at milestones or on a schedule) and verify against them in CI (PL, PS)
 - [ ] **P2.2** Token and cost ledger: one row per call with model, tokens in and out, cached, cost, outcome (PL)
 - [ ] **P2.3** OpenTelemetry GenAI export: pinned convention version, shared trace ID with the audit log, content capture opt-in and by reference (PL)
 - [ ] **P2.4** Policy engine and `agentctl check` returning allow, council, human or deny with a reason; risk computed from evidence; thresholds aggregated per task and per day (PS)
