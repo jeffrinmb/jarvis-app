@@ -25,7 +25,8 @@ Goal: agree what we are building, who owns it, and where it is piloted.
 - [ ] **P0.7** Close the charter's unverified items: read the full OWASP agentic document, confirm OTel opt-in and `execute_tool` details, check Tessl, MetaGPT, CrewAI, AutoGen, LangGraph, the OpenAI Agents SDK and ISO/IEC 42001 (PS, ME)
 - [ ] **P0.8** Capture baselines for both pilots: cycle time, defect rate, build time, cost, review time (TL)
 - [ ] **P0.9** Run the DORA readiness checklist for each pilot team (clear AI stance, version control, small batches, internal data access, platform quality) (TL)
-- [ ] **P0.10** Repository hygiene: make `main` the default branch (done on GitHub if completed), branch protection on `main`, CODEOWNERS, `.gitignore` (including `.obsidian/`), licence decision, contributing guide (FO, PL)
+- [ ] **P0.10** Repository hygiene: make `main` the default branch, branch protection on `main` with the CI checks required, CODEOWNERS, contributing guide. _Done: `.gitignore` (including `.obsidian/`), Apache-2.0 licence added._ (FO, PL)
+- [ ] **P0.10a** Confirm who owns the copyright (you or an employer) before publishing; if a NOTICE file or per-file headers are added, they need the copyright holder's name (FO)
 - [ ] **P0.11** Decide whether OpenHands should be evaluated as a runtime or design reference before building our own orchestrator (FO, PL)
 - [ ] **P0.12** Start the framework decisions log (ADR 0001: language and storage) (FO)
 

@@ -147,4 +147,6 @@ Much of the external guidance behind the charter comes from vendor and practitio
 
 ## Licence
 
-Not yet decided (tracked as task P0.10).
+Licensed under the [Apache License, Version 2.0](LICENSE). Unless you state otherwise, any contribution you submit for inclusion is licensed under the same terms.
+
+The licence does not grant rights to third-party trademarks, including BMAD's (BMad, BMad Method, BMad Core).
