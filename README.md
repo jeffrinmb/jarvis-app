@@ -67,6 +67,8 @@ More diagrams (decision routing, pipeline and gates, memory, learning loop, inje
 | [Framework charter](docs/framework-charter.md) | Principles, architecture, autonomy tiers, practices for each SDLC phase, cross-cutting controls, roadmap, risks, open decisions, and the verification status of every external claim |
 | [Architecture diagrams](docs/architecture.md) | Mermaid diagrams for the system, decision flow, pipeline, memory, learning loop, tool access and roadmap |
 | [TODO list](docs/TODO.md) | Phase-by-phase, task-by-task plan with exit checks and a suggested first two weeks |
+| [Contributing](CONTRIBUTING.md) | Setup, checks to run, branch and pull request workflow, rules for AI-assisted contributions |
+| [Security policy](SECURITY.md) | How to report a vulnerability, and what counts as one for this project |
 
 ## Roadmap
 
@@ -130,7 +132,7 @@ uv run agentctl verify --anchor SEQ:HASH
 
 A ledger file cannot reveal that its tail was cut off or that the whole chain was rewritten consistently. Record an anchor (`agentctl head`) elsewhere and pass it to `verify --anchor` to detect both.
 
-To work on the design:
+To work on the project, see [CONTRIBUTING.md](CONTRIBUTING.md). In short:
 
 1. Read the [charter](docs/framework-charter.md), starting with sections 2 (principles) and 4 (autonomy tiers).
 2. Pick a task from the [TODO list](docs/TODO.md) and open an issue or pull request referencing its ID (for example `P2.4`).
