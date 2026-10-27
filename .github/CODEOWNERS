@@ -1,0 +1,24 @@
+# Code owners are requested for review automatically. Replace the single owner
+# with named people or teams when owners are assigned (docs/TODO.md, P0.1).
+# Later rules override earlier ones.
+
+# Default
+*                           @jeffrinmb
+
+# Policy, security and the audit ledger: changes here alter what agents may do
+# or how evidence is kept, so they always need an owner's review.
+/src/jarvis/core/policy/    @jeffrinmb
+/src/jarvis/core/security/  @jeffrinmb
+/src/jarvis/core/ledger/    @jeffrinmb
+/src/jarvis/core/gates/     @jeffrinmb
+/schemas/                   @jeffrinmb
+/examples/policy.yaml       @jeffrinmb
+
+# Automation and repository rules
+/.github/                   @jeffrinmb
+/LICENSE                    @jeffrinmb
+/SECURITY.md                @jeffrinmb
+
+# Charter and decisions
+/docs/framework-charter.md  @jeffrinmb
+/docs/adr/                  @jeffrinmb
