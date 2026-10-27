@@ -11,7 +11,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | # | Requirement | Defined in | Tasks | Status |
 |---|---|---|---|---|
 | 1 | AI across the SDLC inside enforced boundaries (autonomy tiers) | Charter 4 | P2.4, P2.5, P4.1, P4.2, P4.15 | Partly built: the policy gate |
-| 2 | Only major decisions reach a human | Charter 4.1 | P2.4, P2.7, P2.7a, P2.7b, P2.7c, P2.10, P6.10 | Partly built: the gate decides; approvals planned |
+| 2 | Only major decisions reach a human | Charter 4.1 | P2.4, P2.7, P2.7a, P2.7b, P2.7c, P2.10, P2.10a, P6.10 | Partly built: the gate decides; approvals planned |
 | 3 | Human in the loop: park and resume, attributed approvals, override and stop | Charter 4, 8.11 | P2.7, P2.8, P4.1, P7.7 | Planned |
 | 4 | Council for high-risk decisions | Charter 4.2 | P7.1, P7.1a | Planned |
 | 5 | Token optimisation and proper token usage | Charter 7.3, 8.1, 8.2 | P2.2, P2.8, P3.5, P4.4a, P4.7a, P6.3 | Planned |
@@ -22,7 +22,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | 10 | Memory as an LLM-wiki on Markdown, Obsidian optional | Charter 7.1 | P3.1, P3.1a, P3.2, P3.3, P3.3a, P3.4, P3.10 | Planned |
 | 11 | Graph memory and cheap retrieval | Charter 7.2 | P3.7, P3.8, P3.9 | Planned |
 | 12 | Reusable on greenfield and brownfield projects | Charter 5.8, 6 | P0.4, P5.0, P5.1, P5.2, P5.3, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10, P7.8 | Planned |
-| 13 | Multiple harnesses and models | Charter 8.12 | P2.6, P2.6a, P2.6c, P2.6d, P4.7, P7.3, P7.4, P7.14 | Partly built: the Claude Code hook exists, ADR 0003 |
+| 13 | Multiple harnesses and models | Charter 8.12 | P2.6, P2.6a, P2.6c, P2.6d, P2.6e, P4.7, P7.3, P7.4, P7.14 | Partly built: the Claude Code hook runs in log-only mode on this repository, ADR 0003 |
 | 14 | Governed tool and MCP access | Charter 8.3 | P4.4, P4.5, P4.5a, P4.6 | Planned |
 | 15 | Prompt-injection resistance | Charter 8.5 | P2.5, P2.6b, P4.4b, P4.12, P4.12a, P6.4 | Partly built: taint and the trifecta rule |
 | 16 | Software supply chain | Charter 8.6 | P1.5, P1.5a, P1.5b, P4.11, P4.11a, P7.12a | Partly built: pinned actions, lockfile, secret scan |
