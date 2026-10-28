@@ -77,3 +77,16 @@ Enforce mode (it would have blocked this very session), how `ask` behaves in thi
 ### Next round
 
 Keep the hook on for several days of normal work, then run the report again. Decide the taint question (item 1 above), decide which shell prefixes to allow, and record the new numbers here. P2.10 should not start until the intervention rate for ordinary work is low and every remaining intervention is one a person agrees with.
+
+## Round 2: 2026-10-28, token capture (P2.2a)
+
+Registered `Stop`, `SubagentStop` and `SessionEnd` in the git-ignored `.claude/settings.local.json` and ran two trivial Explore subagents during a normal session.
+
+- **`Stop` and `SubagentStop` fire** in the desktop app and the hook captured usage on both. `SessionEnd` was not observed.
+- **A real bug, found only by running it.** The first build read `transcript_path` on `SubagentStop`. That is the main session's transcript, so 454 main-session messages were recorded under the subagent's identity and the subagent's own calls were missed. The documentation (the `SubagentStop` section of the hooks reference) names `agent_transcript_path` for the subagent's own file. Fixed; the second subagent's two messages then matched its transcript file exactly (8,329 in, 25,269 cached, 177 out; then 710, 33,596, 51).
+- **Dedupe confirmed on real data:** this session's transcript had 1,309 usage records for 434 distinct message ids when first read, so summing records would have been about three times too high.
+- **Sidechain:** the main transcript held no `isSidechain` records; subagent records are only in the subagent files.
+- **Cost:** unknown for every row, because no price table is configured here (`prices_path` unset). The report flags this.
+- **Whole-file re-read:** not measured yet. The session transcript was about 17 MB at the time; the per-turn cost has not been timed.
+
+Lesson: the unit tests had asserted the wrong behaviour for subagents, because I had written them from an assumption. Only a live run (and then the primary documentation) showed it.
