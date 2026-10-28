@@ -84,7 +84,7 @@ agentctl resume
 
 The kill switch is a `HALT` file in the same per-user state directory the hook uses, outside the project ([ADR 0005](adr/0005-budgets-loop-breaker-and-kill-switch.md)). While it exists the hook's gate denies every call, reads included; in log-only mode it records that and still never blocks. If the file cannot be read it counts as on.
 
-The policy can also carry a `budgets` block (see `examples/claude-code/policy.yaml`): calls per task and per day, and a loop breaker for the same call repeated. A tripped limit sends the call to a human (or denies, with `on_exceed: deny`). Counting from the ledger means a budget only holds while the ledger is intact (G4). An agent with a shell could delete the `HALT` file until the sandbox (P4.2) is in place.
+The policy can also carry a `budgets` block (see `examples/claude-code/policy.yaml`): calls per task and per day, and a loop breaker for the same call repeated. A tripped limit sends the call to a human (or denies, with `on_exceed: deny`). An `anomalies` block adds detectors for repeated denials (however the retries vary), a tool never used before and bursts of calls, each recorded as an `anomaly_detected` event and set to alert, pause for a human or deny ([ADR 0006](adr/0006-anomaly-rules.md)). Counting from the ledger means a budget or detector only holds while the ledger is intact (G4). An agent with a shell could delete the `HALT` file until the sandbox (P4.2) is in place.
 
 ## What is recorded
 

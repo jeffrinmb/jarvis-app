@@ -55,6 +55,9 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 - `policy`: new optional `budgets` block (`max_calls_per_task`, `max_calls_per_day`, `loop_threshold`, `loop_window`, `on_exceed`). Unset means no limit, so existing policies behave as before. `on_exceed` can only be `human` or `deny`, never `allow`; `loop_threshold` and `loop_window` must be set together and the window cannot be smaller than the threshold (task P2.8).
 - Data convention, no schema change: `policy_decision` events carry `data.fingerprint` (a hash of the tool and normalised paths, no content), and a tripped budget or loop also writes a `budget_exceeded` or `loop_detected` event. The `kill_switch` event kind already existed and is now written by `agentctl halt` and `agentctl resume`.
 
+- `policy`: new optional `anomalies` block (`max_denials` with `denial_window`, `new_tool` with `new_tool_min_history` and `new_tool_risk_at_least`, `burst_calls` with `burst_seconds`, `on_anomaly`). Every detector is off until set. `on_anomaly` is `alert`, `human` or `deny`, never `allow`, and an `alert` adds no allow match (task P2.8a).
+- `event`: new event kind `anomaly_detected` (additive; consumers must treat an unknown kind as not allowed, never as allowed).
+
 Earlier in this period:
 
 No schema changes. One data convention was added without changing any schema: `policy_decision` events now carry an optional `data.context` object with caller context (harness, mode, session id, permission mode, tool-use id, SHA-256 of the policy files). `data` is free-form, so the `event` schema is unchanged.
