@@ -41,6 +41,7 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 | `decision-card` | 1 |
 | `event` | 1 |
 | `policy` | 1 |
+| `price-table` | 1 |
 | `project` | 1 |
 | `task` | 1 |
 | `tiers` | 1 |
@@ -51,6 +52,9 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 ## Changelog
 
 ### Unreleased
+
+- New schema `price-table` (version 1): dollars per million tokens per model, with `as_of` and `source`, used to compute the cost of a model call when the provider did not report one (task P2.2, [ADR 0007](adr/0007-token-and-cost-ledger.md)).
+- Data convention, no schema change: `model_call` events carry `data.cost_source` (`reported`, `computed` or `unknown`). `usage.tokens_in` means input tokens not served from a cache; `usage.tokens_cached` means those that were.
 
 - `policy`: new optional `budgets` block (`max_calls_per_task`, `max_calls_per_day`, `loop_threshold`, `loop_window`, `on_exceed`). Unset means no limit, so existing policies behave as before. `on_exceed` can only be `human` or `deny`, never `allow`; `loop_threshold` and `loop_window` must be set together and the window cannot be smaller than the threshold (task P2.8).
 - Data convention, no schema change: `policy_decision` events carry `data.fingerprint` (a hash of the tool and normalised paths, no content), and a tripped budget or loop also writes a `budget_exceeded` or `loop_detected` event. The `kill_switch` event kind already existed and is now written by `agentctl halt` and `agentctl resume`.

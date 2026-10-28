@@ -8,18 +8,18 @@ The current state of the work, written for whoever picks it up next: another per
 
 ## Where things stand
 
-The project is an early build. Pull requests 1 to 15 are merged to `main`, and no pull request is open at the time of writing.
+The project is an early build. Pull requests 1 to 16 are merged to `main`, and no pull request is open at the time of writing.
 
 **Built, tested and merged**
 
 - **Schemas** for events, tasks, decision cards, policy, tool registry, wiki notes, project config, actions and verdicts, with a versioning policy and changelog ([schema-changelog.md](schema-changelog.md)).
 - **Audit ledger**: a hash-chained JSONL file, with `agentctl log`, `verify` and `head`, and anchors to detect truncation and rewrites.
 - **Policy gate** (`agentctl check`): allow, council, human or deny, with built-in guardrails, taint tracking, the lethal-trifecta rule and cumulative limits that hold under concurrency. It fails closed ([ADR 0002](adr/0002-policy-evaluation-and-fail-closed-rules.md)).
-- **Claude Code hook** (`agentctl hook run`, `snippet`, `doctor`, `report`): builds the gate's action from the real tool call. Log-only by default ([ADR 0003](adr/0003-claude-code-hook-interface.md), [the guide](claude-code-hook.md)). `agentctl halt` and `resume` are a kill switch, and the policy can carry call budgets, a loop breaker and anomaly rules ([ADR 0005](adr/0005-budgets-loop-breaker-and-kill-switch.md), [ADR 0006](adr/0006-anomaly-rules.md), `P2.8`, `P2.8a`). It can read policy from a git commit or an outside directory, and enforce mode refuses the agent-writable working tree ([ADR 0004](adr/0004-trusted-policy-source.md), `P2.4b`).
+- **Claude Code hook** (`agentctl hook run`, `snippet`, `doctor`, `report`): builds the gate's action from the real tool call. Log-only by default ([ADR 0003](adr/0003-claude-code-hook-interface.md), [the guide](claude-code-hook.md)). `agentctl halt` and `resume` are a kill switch, and the policy can carry call budgets, a loop breaker and anomaly rules ([ADR 0005](adr/0005-budgets-loop-breaker-and-kill-switch.md), [ADR 0006](adr/0006-anomaly-rules.md), `P2.8`, `P2.8a`). `agentctl tokens record` and `report` keep a token and cost ledger ([ADR 0007](adr/0007-token-and-cost-ledger.md), `P2.2`); nothing fills it automatically yet. It can read policy from a git commit or an outside directory, and enforce mode refuses the agent-writable working tree ([ADR 0004](adr/0004-trusted-policy-source.md), `P2.4b`).
 - **CI**: Linux and Windows, Python 3.12 and 3.13, lint, format, about 390 tests, a secret scan over the full history, actions pinned to commit SHAs, and a single required check, `ci-ok`.
-- **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0006.
+- **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0007.
 
-**Not built yet:** approvals and decision cards, identity and signed events, anomaly rules for domains and data volumes, per-stage and token budgets, the token ledger, OpenTelemetry export, memory (the wiki), the orchestrator and pipeline, brownfield tooling, evals, the council and the visual layer. See [TODO.md](TODO.md).
+**Not built yet:** approvals and decision cards, identity and signed events, anomaly rules for domains and data volumes, per-stage and token budgets, automatic token capture, OpenTelemetry export, memory (the wiki), the orchestrator and pipeline, brownfield tooling, evals, the council and the visual layer. See [TODO.md](TODO.md).
 
 ## Live on the maintainer's machine
 
@@ -44,7 +44,7 @@ The project is an early build. Pull requests 1 to 15 are merged to `main`, and n
 
 In this order, and why:
 
-1. **`P2.2`** token and cost ledger. `P2.3` (OpenTelemetry) first needs the `P0.3` decision on the observability convention.
+1. **`P2.2a`** record model calls automatically from Claude Code's transcript (verify the format first). `P2.3` (OpenTelemetry) first needs the `P0.3` decision on the observability convention.
 2. **`P2.9`, `P2.9a`, `P2.9b`** identity, authenticated roles and signed events (gaps G1 and G4). It needs a decision on how identity and signing work, which is tracked as `P0.15`.
 3. **`P2.7`** the approval flow, then **`P2.10`**.
 4. **`P2.6e`** reduce the hook's cost (about one second per call today) whenever convenient; it does not block the others.
