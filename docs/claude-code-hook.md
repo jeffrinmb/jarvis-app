@@ -47,7 +47,7 @@ A gate `deny` holds in every Claude Code permission mode, including `bypassPermi
    agentctl hook snippet
    ```
 
-   Useful options: `--runner venv` runs the project's `.venv` Python directly (fastest), `--runner uv` goes through `uv run --project`, `--minimal` registers only `PreToolUse`, `SessionStart` and `ConfigChange` (about half the cost), and `--mode enforce` is for later. Hooks added to `.claude/settings.local.json` take effect on the next tool call, with no restart.
+   Useful options: `--runner venv` runs the project's `.venv` Python directly (fastest), `--runner uv` goes through `uv run --project`, `--minimal` registers only `PreToolUse`, `SessionStart` and `ConfigChange` (about half the cost), and `--mode enforce` is for later and needs `--policy-source git` or `directory` (see below). Hooks added to `.claude/settings.local.json` take effect on the next tool call, with no restart.
 5. **Start a Claude Code session in the project**, work normally, then check the ledger:
 
    ```bash
@@ -62,9 +62,21 @@ agentctl hook report
 
 It verifies the ledger first, then summarises the decisions: how often the gate would have intervened, by tool and by rule, which Claude Code tools have no mapping, and a list of what would have been stopped with example paths, so you can judge whether each intervention is sensible. Add `--json` for a machine-readable form. Findings from the first round are in the [dogfood log](dogfood-log.md).
 
+## Where the policy is read from
+
+The hook reads the policy, tool registry, project file and its own adapter config from a **policy source** ([ADR 0004](adr/0004-trusted-policy-source.md)), because an agent that can edit those files can rewrite the rules it is judged by.
+
+| `--policy-source` | Reads | Enforce mode |
+|---|---|---|
+| `worktree` (default) | the project directory, which the agent can write | refused |
+| `git` | the files at a git ref or commit (`--policy-ref`, default `origin/main`) | allowed |
+| `directory` | a directory outside the project (`--policy-dir`) | allowed |
+
+Pin a **full commit SHA** with `--policy-ref`: a branch name can be moved by an agent that has a shell, until the sandbox (P4.2) stops it. The options can also come from `JARVIS_POLICY_SOURCE`, `JARVIS_POLICY_REF` and `JARVIS_POLICY_DIR`. They are deliberately not settable in the adapter config, which the agent could edit. `agentctl hook snippet --policy-source git --policy-ref <sha>` writes them into the settings block, and `agentctl hook doctor` shows which source and file hashes are in use.
+
 ## What is recorded
 
-Every decision records: the tool and its registry id, the project-relative paths, the verdict and the rule ids that produced it, the session id, the permission mode, the tool-use id, whether the session was tainted, and a SHA-256 of the policy, registry and project files in force. The ledger is hash-chained, so edits to it are detected.
+Every decision records: the tool and its registry id, the project-relative paths, the verdict and the rule ids that produced it, the session id, the permission mode, the tool-use id, whether the session was tainted, the policy source (for example `git:<ref>@<commit prefix>`) and whether it is protected, and a SHA-256 of the policy, registry and project files in force. The ledger is hash-chained, so edits to it are detected.
 
 **Never recorded:** file contents, command text, tool output or error text. Secret redaction proper arrives with P2.12, so for now the hook simply keeps that material out.
 
