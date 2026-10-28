@@ -11,18 +11,27 @@ from .tool_registry import ToolRegistry
 from .wiki import WikiFrontmatter
 
 
-def load_yaml_model[T: BaseModel](path: str | Path, model: type[T]) -> T:
-    """Parse a YAML file and validate it against ``model``."""
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    return model.model_validate(data)
+def parse_yaml_model[T: BaseModel](text: str, model: type[T]) -> T:
+    """Parse YAML text with ``safe_load`` and validate it against ``model``."""
+    return model.model_validate(yaml.safe_load(text))
 
 
-def load_tool_registry(path: str | Path) -> ToolRegistry:
+def parse_tool_registry(text: str) -> ToolRegistry:
     """Tool registries may be a bare YAML list of entries or a full document."""
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    data = yaml.safe_load(text)
     if isinstance(data, list):
         data = {"tools": data}
     return ToolRegistry.model_validate(data)
+
+
+def load_yaml_model[T: BaseModel](path: str | Path, model: type[T]) -> T:
+    """Parse a YAML file and validate it against ``model``."""
+    return parse_yaml_model(Path(path).read_text(encoding="utf-8"), model)
+
+
+def load_tool_registry(path: str | Path) -> ToolRegistry:
+    """Load a tool registry file."""
+    return parse_tool_registry(Path(path).read_text(encoding="utf-8"))
 
 
 def split_frontmatter(text: str) -> tuple[dict, str]:

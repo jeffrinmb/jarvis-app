@@ -21,7 +21,14 @@ from .common import (
 )
 from .decision_card import DecisionCard
 from .event import Event, EventKind
-from .loader import load_tool_registry, load_yaml_model, parse_note, split_frontmatter
+from .loader import (
+    load_tool_registry,
+    load_yaml_model,
+    parse_note,
+    parse_tool_registry,
+    parse_yaml_model,
+    split_frontmatter,
+)
 from .policy import Policy
 from .project import ProjectConfig, TiersConfig
 from .task import Task, TaskState
@@ -91,5 +98,7 @@ __all__ = [
     "load_tool_registry",
     "load_yaml_model",
     "parse_note",
+    "parse_tool_registry",
+    "parse_yaml_model",
     "split_frontmatter",
 ]

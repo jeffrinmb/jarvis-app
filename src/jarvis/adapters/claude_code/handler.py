@@ -23,7 +23,6 @@ or error text (secret redaction arrives with P2.12).
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,8 +39,8 @@ from jarvis.core.schemas import (
     Policy,
     ProjectConfig,
     Verdict,
-    load_tool_registry,
-    load_yaml_model,
+    parse_tool_registry,
+    parse_yaml_model,
 )
 from jarvis.core.schemas.event import ToolRef
 
@@ -49,6 +48,7 @@ from .config import HookConfig, HookMode
 from .mapping import agent_identity, build_action, safe_session_id
 from .payload import HookInput
 from .session import SessionStore
+from .source import SourceError, SourceFile, TrustedSource, WorktreeSource
 
 SETTINGS_SOURCES = {"user_settings", "project_settings", "local_settings"}
 BLOCKING_EVENTS = {"PreToolUse", "ConfigChange"}
@@ -68,6 +68,9 @@ class HookContext:
     mode: HookMode
     project_dir: Path
     state_dir: Path
+    # Where the policy files are read from. ``None`` means the working tree, which is
+    # agent-writable and therefore refused in enforce mode (ADR 0004).
+    source: TrustedSource | None = None
 
     def resolve(self, relative: str) -> Path:
         path = Path(relative)
@@ -77,12 +80,9 @@ class HookContext:
     def enforcing(self) -> bool:
         return self.mode is HookMode.ENFORCE
 
-
-def file_sha256(path: Path) -> str:
-    try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
-    except OSError:
-        return "missing"
+    @property
+    def policy_source(self) -> TrustedSource:
+        return self.source if self.source is not None else WorktreeSource(self.project_dir)
 
 
 def handle(payload: Any, ctx: HookContext) -> HookResult:
@@ -149,34 +149,54 @@ def _context(inp: HookInput, ctx: HookContext) -> dict[str, Any]:
     }
 
 
+def _read_required(source: TrustedSource, relative: str) -> SourceFile:
+    found = source.read(relative)
+    if found is None:
+        raise SourceError(f"{relative} was not found in the policy source {source.describe()}")
+    return found
+
+
 def _load_policy_files(ctx: HookContext):
+    """Read the policy, registry and project files from the trusted source.
+
+    In enforce mode the source must not be agent-writable. Anything missing, unreadable or
+    invalid raises, which the caller turns into a block (enforce) or an error record (log-only).
+    """
+    source = ctx.policy_source
+    if ctx.enforcing and not source.protected:
+        raise SourceError(
+            "enforce mode needs a policy source the agent cannot write: use --policy-source git "
+            "or directory (the working tree is agent-writable)"
+        )
     cfg = ctx.cfg
-    policy_path = ctx.resolve(cfg.policy_path)
-    registry_path = ctx.resolve(cfg.registry_path)
-    policy = load_yaml_model(policy_path, Policy)
-    registry = load_tool_registry(registry_path)
+    policy_file = _read_required(source, cfg.policy_path)
+    registry_file = _read_required(source, cfg.registry_path)
+    policy = parse_yaml_model(policy_file.text, Policy)
+    registry = parse_tool_registry(registry_file.text)
     project = None
-    hashes = {
-        "policy_sha256": file_sha256(policy_path),
-        "registry_sha256": file_sha256(registry_path),
+    provenance = {
+        "policy_source": source.describe(),
+        "policy_source_protected": source.protected,
+        "policy_sha256": policy_file.sha256,
+        "registry_sha256": registry_file.sha256,
     }
     if cfg.project_path:
-        project_path = ctx.resolve(cfg.project_path)
-        project = load_yaml_model(project_path, ProjectConfig)
-        hashes["project_sha256"] = file_sha256(project_path)
-    return policy, registry, project, hashes
+        project_file = _read_required(source, cfg.project_path)
+        project = parse_yaml_model(project_file.text, ProjectConfig)
+        provenance["project_sha256"] = project_file.sha256
+    return policy, registry, project, provenance
 
 
 def _pre_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
     if not inp.tool_name:
         raise ValueError("PreToolUse input has no tool_name")
-    policy, registry, project, hashes = _load_policy_files(ctx)
+    policy, registry, project, provenance = _load_policy_files(ctx)
     store = _store(ctx)
     loaded = store.load(inp.session_id)
     plan = build_action(inp, ctx.cfg, str(ctx.project_dir), loaded.state)
     extra = {
         **_context(inp, ctx),
-        **hashes,
+        **provenance,
         "claude_tool": plan.claude_tool,
         "shell_class": plan.shell_class,
         "state_healthy": loaded.healthy,

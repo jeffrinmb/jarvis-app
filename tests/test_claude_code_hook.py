@@ -11,6 +11,7 @@ import pytest
 
 import jarvis.adapters.claude_code.handler as handler_module
 from jarvis.adapters.claude_code import HookConfig, HookContext, HookMode, SessionStore, handle
+from jarvis.adapters.claude_code.source import DirectorySource
 from jarvis.core.ledger import Ledger
 from jarvis.core.schemas import TrustLabel
 
@@ -32,7 +33,10 @@ def project(tmp_path):
 
 def ctx_for(project, mode=HookMode.LOG_ONLY, **cfg):
     config = HookConfig(on_behalf_of="alice", **cfg)
-    return HookContext(config, mode, project.root, project.state)
+    # Enforce mode refuses the agent-writable working tree (ADR 0004), so these tests read the
+    # policy through a directory source that points at the same files.
+    source = DirectorySource(project.root) if mode is HookMode.ENFORCE else None
+    return HookContext(config, mode, project.root, project.state, source)
 
 
 def abs_path(project, relative):

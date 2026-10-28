@@ -23,8 +23,8 @@ def _venv_python() -> str:
     return "${CLAUDE_PROJECT_DIR}/.venv/bin/python"
 
 
-def _command(runner: str, mode: HookMode) -> dict[str, Any]:
-    run = ["hook", "run", "--mode", mode.value]
+def _command(runner: str, mode: HookMode, source_args: tuple[str, ...] = ()) -> dict[str, Any]:
+    run = ["hook", "run", "--mode", mode.value, *source_args]
     if runner == "uv":
         return {
             "command": "uv",
@@ -41,6 +41,9 @@ def build_settings(
     runner: str = "direct",
     timeout: int | None = None,
     minimal: bool = False,
+    policy_source: str | None = None,
+    policy_ref: str | None = None,
+    policy_dir: str | None = None,
 ) -> dict[str, Any]:
     """Settings JSON with one hook command registered for each event the adapter handles.
 
@@ -51,10 +54,26 @@ def build_settings(
     is applied when a call is requested, so ``PostToolUse`` is not needed for safety; leaving
     it out halves the per-call cost (each hook start is about a second today) at the price of
     not recording whether calls succeeded.
+
+    ``policy_source``, ``policy_ref`` and ``policy_dir`` are written into the command so the
+    choice of where policy is read from is not in a file the agent can edit (ADR 0004). Enforce
+    mode refuses the agent-writable working tree.
     """
+    if mode is HookMode.ENFORCE and policy_source in (None, "worktree"):
+        raise ValueError(
+            "enforce mode needs --policy-source git or directory: the working tree is "
+            "agent-writable (ADR 0004)"
+        )
+    source_args: list[str] = []
+    if policy_source:
+        source_args += ["--policy-source", policy_source]
+    if policy_ref:
+        source_args += ["--policy-ref", policy_ref]
+    if policy_dir:
+        source_args += ["--policy-dir", policy_dir]
     handler: dict[str, Any] = {
         "type": "command",
-        **_command(runner, mode),
+        **_command(runner, mode, tuple(source_args)),
         "timeout": timeout or DEFAULT_TIMEOUT_SECONDS,
     }
     if mode is HookMode.ENFORCE:

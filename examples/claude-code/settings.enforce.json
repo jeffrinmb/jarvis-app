@@ -14,7 +14,9 @@
               "hook",
               "run",
               "--mode",
-              "enforce"
+              "enforce",
+              "--policy-source",
+              "git"
             ],
             "timeout": 10,
             "onFailure": "block"
@@ -37,7 +39,9 @@
               "hook",
               "run",
               "--mode",
-              "enforce"
+              "enforce",
+              "--policy-source",
+              "git"
             ],
             "timeout": 10,
             "onFailure": "block"
@@ -60,7 +64,9 @@
               "hook",
               "run",
               "--mode",
-              "enforce"
+              "enforce",
+              "--policy-source",
+              "git"
             ],
             "timeout": 10,
             "onFailure": "block"
@@ -83,7 +89,9 @@
               "hook",
               "run",
               "--mode",
-              "enforce"
+              "enforce",
+              "--policy-source",
+              "git"
             ],
             "timeout": 10,
             "onFailure": "block"
@@ -105,7 +113,9 @@
               "hook",
               "run",
               "--mode",
-              "enforce"
+              "enforce",
+              "--policy-source",
+              "git"
             ],
             "timeout": 10,
             "onFailure": "block"

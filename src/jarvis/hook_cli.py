@@ -27,8 +27,14 @@ from jarvis.adapters.claude_code import (
     load_config,
     parse_version,
 )
-from jarvis.adapters.claude_code.config import DEFAULT_CONFIG
+from jarvis.adapters.claude_code.config import DEFAULT_CONFIG, parse_config
 from jarvis.adapters.claude_code.report import render_text, summarize
+from jarvis.adapters.claude_code.source import (
+    SOURCE_KINDS,
+    SourceError,
+    TrustedSource,
+    make_source,
+)
 from jarvis.core.ledger import Ledger
 
 
@@ -45,6 +51,7 @@ def add_hook_parser(sub: argparse._SubParsersAction) -> None:
     )
     run.add_argument("--config", help=f"adapter config (default: <project>/{DEFAULT_CONFIG})")
     run.add_argument("--state-dir", help="per-session state directory (default: user state dir)")
+    add_source_arguments(run)
 
     snippet = hook_sub.add_parser("snippet", help="print the hooks block for a settings file")
     snippet.add_argument("--mode", choices=[m.value for m in HookMode], default="log-only")
@@ -60,20 +67,71 @@ def add_hook_parser(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="register only PreToolUse, SessionStart and ConfigChange (about half the cost)",
     )
+    add_source_arguments(snippet)
 
     doctor = hook_sub.add_parser("doctor", help="check this machine can run the hook in a mode")
     doctor.add_argument("--mode", choices=[m.value for m in HookMode], default="log-only")
+    add_source_arguments(doctor)
 
     report = hook_sub.add_parser("report", help="summarise the decisions the hook recorded")
     report.add_argument("--ledger", help="default: <project>/.agents/ledger/events.jsonl")
     report.add_argument("--json", action="store_true", help="print the summary as JSON")
 
 
+def add_source_arguments(parser: argparse.ArgumentParser) -> None:
+    """Where policy and adapter config are read from (ADR 0004). These come from the command
+    line or environment, never from a file the agent can edit."""
+    parser.add_argument(
+        "--policy-source",
+        choices=SOURCE_KINDS,
+        help="worktree (default, agent-writable, log-only only), git (content at a ref or "
+        "commit) or directory (outside the project). Overrides $JARVIS_POLICY_SOURCE",
+    )
+    parser.add_argument(
+        "--policy-ref",
+        help="git ref or full commit SHA for --policy-source git (default origin/main; a full "
+        "SHA is the strongest). Overrides $JARVIS_POLICY_REF",
+    )
+    parser.add_argument(
+        "--policy-dir",
+        help="directory for --policy-source directory. Overrides $JARVIS_POLICY_DIR",
+    )
+
+
+def source_from_args(args: argparse.Namespace, project_dir: Path) -> TrustedSource:
+    return make_source(
+        getattr(args, "policy_source", None) or os.environ.get("JARVIS_POLICY_SOURCE"),
+        project_dir,
+        getattr(args, "policy_ref", None) or os.environ.get("JARVIS_POLICY_REF"),
+        getattr(args, "policy_dir", None) or os.environ.get("JARVIS_POLICY_DIR"),
+    )
+
+
+def load_config_from(source: TrustedSource, project_dir: Path, config: str | None) -> HookConfig:
+    """Adapter config comes from the same source as the policy; otherwise an agent could edit
+    it to remap tools or loosen trust rules while the policy itself stayed protected."""
+    if source.protected:
+        found = source.read(config or DEFAULT_CONFIG)
+        return parse_config(found.text if found else None)
+    return load_config(Path(config) if config else project_dir / DEFAULT_CONFIG)
+
+
 def run_hook_command(args: argparse.Namespace) -> int:
     if args.hook_command == "run":
         return _run(args)
     if args.hook_command == "snippet":
-        settings = build_settings(HookMode(args.mode), args.runner, minimal=args.minimal)
+        try:
+            settings = build_settings(
+                HookMode(args.mode),
+                args.runner,
+                minimal=args.minimal,
+                policy_source=args.policy_source,
+                policy_ref=args.policy_ref,
+                policy_dir=args.policy_dir,
+            )
+        except ValueError as exc:
+            print(f"cannot build settings: {exc}", file=sys.stderr)
+            return 2
         print(json.dumps(settings, indent=2))
         return 0
     if args.hook_command == "report":
@@ -129,16 +187,18 @@ def _run(args: argparse.Namespace) -> int:
 
     cwd = payload.get("cwd") if isinstance(payload, dict) else None
     project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd or os.getcwd())
-    config_path = Path(args.config) if args.config else project_dir / DEFAULT_CONFIG
 
     try:
-        cfg = load_config(config_path)
+        source = source_from_args(args, project_dir)
+        cfg = load_config_from(source, project_dir, args.config)
+    except SourceError as exc:
+        return _failure(enforce_hint, f"policy source: {exc}")
     except (ValidationError, OSError, ValueError, yaml.YAMLError) as exc:
-        return _failure(enforce_hint, f"cannot load {config_path}: {type(exc).__name__}")
+        return _failure(enforce_hint, f"cannot load adapter config: {type(exc).__name__}")
 
     mode = HookMode(mode_hint) if mode_hint in {m.value for m in HookMode} else cfg.mode
     state_dir = Path(args.state_dir) if args.state_dir else default_state_dir()
-    result = handle(payload, HookContext(cfg, mode, project_dir, state_dir))
+    result = handle(payload, HookContext(cfg, mode, project_dir, state_dir, source))
 
     if result.stdout:
         print(result.stdout)
@@ -163,21 +223,32 @@ def _doctor(args: argparse.Namespace) -> int:
 
     project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     cfg = HookConfig()
-    config_path = project_dir / DEFAULT_CONFIG
     try:
-        cfg = load_config(config_path)
-        config_note = f"config: {config_path}" if config_path.exists() else "config: defaults"
-        print(f"ok       {config_note}")
-    except (ValidationError, OSError, ValueError, yaml.YAMLError) as exc:
-        print(f"PROBLEM  cannot load {config_path}: {type(exc).__name__}")
+        source = source_from_args(args, project_dir)
+        print(f"ok       policy source: {source.describe()} (protected: {source.protected})")
+    except SourceError as exc:
+        print(f"PROBLEM  policy source: {exc}")
+        return 1
+    if mode is HookMode.ENFORCE and not source.protected:
+        print("PROBLEM  enforce mode needs --policy-source git or directory (ADR 0004)")
         findings.append(_problem())
-    for label, rel in (("policy", cfg.policy_path), ("tool registry", cfg.registry_path)):
-        path = project_dir / rel
-        if path.exists():
-            print(f"ok       {label}: {path}")
-        else:
-            print(f"PROBLEM  {label} not found: {path}")
-            findings.append(_problem())
+    try:
+        cfg = load_config_from(source, project_dir, None)
+        print("ok       adapter config loaded")
+    except (SourceError, ValidationError, OSError, ValueError, yaml.YAMLError) as exc:
+        print(f"PROBLEM  cannot load adapter config: {type(exc).__name__}")
+        findings.append(_problem())
+    try:
+        for label, rel in (("policy", cfg.policy_path), ("tool registry", cfg.registry_path)):
+            found = source.read(rel)
+            if found is not None:
+                print(f"ok       {label}: {rel} (sha256 {found.sha256[:12]})")
+            else:
+                print(f"PROBLEM  {label} not found in the policy source: {rel}")
+                findings.append(_problem())
+    except SourceError as exc:
+        print(f"PROBLEM  {exc}")
+        findings.append(_problem())
 
     for finding in findings:
         print(f"{'ok      ' if finding.ok else 'PROBLEM '} {finding.message}")
