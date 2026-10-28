@@ -37,6 +37,13 @@ from jarvis.core.schemas import (
     load_yaml_model,
 )
 from jarvis.core.schemas.event import ModelRef, ToolRef, Usage
+from jarvis.core.tokens import (
+    GROUPS,
+    load_price_table,
+    record_model_call,
+    render_tokens,
+    summarize_tokens,
+)
 from jarvis.hook_cli import add_hook_parser, run_hook_command
 
 DEFAULT_LEDGER = ".agents/ledger/events.jsonl"
@@ -128,6 +135,28 @@ def _build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="show whether the kill switch is on (exit 1 if on)")
     status.add_argument("--ledger")
     status.add_argument("--state-dir")
+
+    tokens = sub.add_parser("tokens", help="token and cost ledger: record a call, report usage")
+    tokens_sub = tokens.add_subparsers(dest="tokens_command", required=True)
+    rec = tokens_sub.add_parser("record", help="append one model-call row to the ledger")
+    rec.add_argument("--ledger")
+    rec.add_argument("--agent", required=True)
+    rec.add_argument("--on-behalf-of", required=True)
+    rec.add_argument("--model", required=True)
+    rec.add_argument("--provider")
+    rec.add_argument("--prompt-version")
+    rec.add_argument("--task")
+    rec.add_argument("--stage")
+    rec.add_argument("--tokens-in", type=int, required=True, help="input tokens not from a cache")
+    rec.add_argument("--tokens-out", type=int, required=True)
+    rec.add_argument("--tokens-cached", type=int, default=0, help="input tokens from a cache")
+    rec.add_argument("--cost-usd", type=float, help="provider-reported cost; wins over --prices")
+    rec.add_argument("--prices", help="price table YAML, used when --cost-usd is not given")
+    rec.add_argument("--outcome")
+    rep = tokens_sub.add_parser("report", help="summarise recorded model calls")
+    rep.add_argument("--ledger")
+    rep.add_argument("--by", choices=GROUPS, default="model")
+    rep.add_argument("--json", action="store_true")
 
     schema = sub.add_parser("schema", help="schema tools")
     schema_sub = schema.add_subparsers(dest="schema_command", required=True)
@@ -227,6 +256,47 @@ def _switch_command(args: argparse.Namespace, ledger: Ledger) -> int:
     return 1 if halt else 0
 
 
+def _tokens_command(args: argparse.Namespace, ledger: Ledger) -> int:
+    if args.tokens_command == "report":
+        if not ledger.path.exists():
+            print(f"ledger not found: {ledger.path}", file=sys.stderr)
+            return 2
+        result = ledger.verify()
+        if not result.ok:
+            print(f"ledger fails verification: {result.error}", file=sys.stderr)
+            return 1
+        summary = summarize_tokens(ledger.records(), args.by)
+        print(json.dumps(summary, indent=2) if args.json else render_tokens(summary))
+        return 0
+    try:
+        prices = load_price_table(args.prices) if args.prices else None
+        record = record_model_call(
+            ledger,
+            agent_id=args.agent,
+            on_behalf_of=args.on_behalf_of,
+            model=args.model,
+            provider=args.provider,
+            prompt_version=args.prompt_version,
+            task_id=args.task,
+            stage=args.stage,
+            tokens_in=args.tokens_in,
+            tokens_out=args.tokens_out,
+            tokens_cached=args.tokens_cached,
+            cost_usd=args.cost_usd,
+            prices=prices,
+            outcome=args.outcome,
+        )
+    except (ValidationError, ValueError, OSError, yaml.YAMLError) as exc:
+        print(f"invalid input: {exc}", file=sys.stderr)
+        return 2
+    except LedgerError as exc:
+        print(f"ledger error: {exc}", file=sys.stderr)
+        return 1
+    source = record["event"]["data"]["cost_source"]
+    print(f"{record['seq']}:{record['hash']} cost {source}")
+    return 0
+
+
 def _load_action(source: str) -> Action:
     text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
     return Action.model_validate(yaml.safe_load(text))  # YAML is a superset of JSON
@@ -274,6 +344,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "check":
         return _check_command(args, ledger)
+
+    if args.command == "tokens":
+        return _tokens_command(args, ledger)
 
     if args.command in ("halt", "resume", "status"):
         return _switch_command(args, ledger)

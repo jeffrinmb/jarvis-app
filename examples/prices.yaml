@@ -1,0 +1,13 @@
+# A price table for `agentctl tokens record --prices`. Rates are US dollars per million tokens.
+#
+# ILLUSTRATIVE ONLY. These are not real prices and "example-model" is not a real model. Copy the
+# rates for the models you use from your provider's price page, name that page in `source` and
+# set `as_of` to the date you copied them. Prices change, so refresh the table when they do.
+schema_version: 1
+as_of: 2026-01-01
+source: replace with the URL of your provider's price page
+models:
+  example-model:
+    input_per_mtok: 1.0
+    output_per_mtok: 5.0
+    cached_input_per_mtok: 0.1   # optional; unset bills cached tokens at the input rate

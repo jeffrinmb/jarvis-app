@@ -30,6 +30,7 @@ from .loader import (
     split_frontmatter,
 )
 from .policy import Policy
+from .price_table import PriceTable
 from .project import ProjectConfig, TiersConfig
 from .task import Task, TaskState
 from .tool_registry import ToolEntry, ToolRegistry
@@ -41,6 +42,7 @@ SCHEMAS: dict[str, type[BaseModel]] = {
     "decision-card": DecisionCard,
     "event": Event,
     "policy": Policy,
+    "price-table": PriceTable,
     "project": ProjectConfig,
     "task": Task,
     "tiers": TiersConfig,
@@ -80,6 +82,7 @@ __all__ = [
     "Event",
     "EventKind",
     "Policy",
+    "PriceTable",
     "ProjectConfig",
     "RiskClass",
     "RuleMatch",

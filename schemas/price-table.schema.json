@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "Rate": {
+      "additionalProperties": false,
+      "properties": {
+        "cached_input_per_mtok": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rate for input served from a cache. Unset means cached tokens are billed at the full input rate, which overstates and so errs on the safe side.",
+          "title": "Cached Input Per Mtok"
+        },
+        "input_per_mtok": {
+          "minimum": 0,
+          "title": "Input Per Mtok",
+          "type": "number"
+        },
+        "output_per_mtok": {
+          "minimum": 0,
+          "title": "Output Per Mtok",
+          "type": "number"
+        }
+      },
+      "required": [
+        "input_per_mtok",
+        "output_per_mtok"
+      ],
+      "title": "Rate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "as_of": {
+      "description": "When these rates were copied from the provider",
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+    },
+    "models": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Rate"
+      },
+      "minProperties": 1,
+      "title": "Models",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source": {
+      "description": "Where the rates came from, for example a URL",
+      "minLength": 1,
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "as_of",
+    "source",
+    "models"
+  ],
+  "title": "PriceTable",
+  "type": "object"
+}
