@@ -8,6 +8,7 @@ event, or a transcript that lagged behind the last turn, simply catches up.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
@@ -54,12 +55,15 @@ def _event(
     message: MessageUsage,
     inp: HookInput,
     ctx: HookContext,
+    path: str,
     prices: PriceTable | None,
     prices_sha256: str | None,
     session: str,
     now: datetime,
 ):
     agent_id, behalf = agent_identity(inp, ctx.cfg)
+    if inp.hook_event_name != "SubagentStop":
+        agent_id = ctx.cfg.agent_name  # the main transcript belongs to the session, not a subagent
     ts = message.ts if message.ts is not None and message.ts <= now else None
     extra = {
         "source": SOURCE,
@@ -67,6 +71,10 @@ def _event(
         "session_id": session,
         "cache_creation_tokens": message.cache_creation_tokens,
         "sidechain": message.sidechain,
+        # Which event and file this came from, to diagnose how Claude Code passes transcripts.
+        # Only the file name: a full path would reveal the user's directory layout.
+        "hook_event": inp.hook_event_name,
+        "transcript_file": Path(path).name[:120],
     }
     if prices_sha256 and prices is not None and message.model in prices.models:
         extra["prices_sha256"] = prices_sha256
@@ -88,10 +96,10 @@ def _event(
     )
 
 
-def capture_usage(inp: HookInput, ctx: HookContext, ledger: Ledger) -> int:
-    """Append a row for each message in the transcript that has none yet. Returns how many."""
-    assert inp.transcript_path
-    transcript = read_transcript_usage(inp.transcript_path)
+def capture_usage(inp: HookInput, ctx: HookContext, ledger: Ledger, path: str) -> int:
+    """Append a row for each message in the transcript at ``path`` that has none yet.
+    Returns how many."""
+    transcript = read_transcript_usage(path)
     session = safe_session_id(inp.session_id)
     prices, prices_sha256 = _load_prices(ctx)
     now = datetime.now(UTC)
@@ -110,6 +118,6 @@ def capture_usage(inp: HookInput, ctx: HookContext, ledger: Ledger) -> int:
         for message in transcript.messages:
             if message.message_id in recorded or written >= MAX_NEW_ROWS:
                 continue
-            tx.append(_event(message, inp, ctx, prices, prices_sha256, session, now))
+            tx.append(_event(message, inp, ctx, path, prices, prices_sha256, session, now))
             written += 1
     return written

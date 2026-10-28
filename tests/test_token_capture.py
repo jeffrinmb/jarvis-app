@@ -219,12 +219,48 @@ def test_the_same_message_id_in_another_session_is_a_separate_row(project, tmp_p
     assert len(rows(project)) == 2
 
 
-def test_subagent_stop_is_captured_and_marked_as_a_subagent(project, tmp_path):
-    path = write(tmp_path / "t.jsonl", record(isSidechain=True))
-    payload = {**stop(project, path, "SubagentStop"), "agent_id": "ag1", "agent_type": "Explore"}
-    handle(payload, ctx_for(project, tmp_path))
+def subagent_stop(project, main, sub_file):
+    return {
+        **stop(project, main, "SubagentStop"),
+        "agent_id": "ag1",
+        "agent_type": "Explore",
+        "agent_transcript_path": str(sub_file),
+    }
+
+
+def test_subagent_stop_reads_the_subagents_own_transcript_under_its_identity(project, tmp_path):
+    """Verified live: SubagentStop's transcript_path is the MAIN transcript, and the subagent's
+    own calls are in agent_transcript_path (documented field)."""
+    main = write(tmp_path / "main.jsonl", record("parent_1"), record("parent_2"))
+    child = write(tmp_path / "agent-ag1.jsonl", record("child_1", isSidechain=True))
+    handle(subagent_stop(project, main, child), ctx_for(project, tmp_path))
     (row,) = rows(project)
-    assert row["agent_id"] == "claude-code:Explore:ag1" and row["data"]["sidechain"] is True
+    assert row["data"]["message_id"] == "child_1"
+    assert row["agent_id"] == "claude-code:Explore:ag1"
+    assert row["data"]["transcript_file"] == "agent-ag1.jsonl"
+    assert row["data"]["hook_event"] == "SubagentStop"
+
+
+def test_the_main_transcript_is_never_attributed_to_a_subagent(project, tmp_path):
+    main = write(tmp_path / "main.jsonl", record("parent_1"))
+    child = write(tmp_path / "agent-ag1.jsonl", record("child_1"))
+    ctx = ctx_for(project, tmp_path)
+    handle(subagent_stop(project, main, child), ctx)
+    handle(stop(project, main), ctx)
+    by_message = {r["data"]["message_id"]: r["agent_id"] for r in rows(project)}
+    assert by_message == {"child_1": "claude-code:Explore:ag1", "parent_1": "claude-code"}
+
+
+def test_stop_ignores_a_subagent_path_and_a_subagent_stop_without_one_records_nothing(
+    project, tmp_path
+):
+    main = write(tmp_path / "main.jsonl", record("parent_1"))
+    child = write(tmp_path / "agent-ag1.jsonl", record("child_1"))
+    ctx = ctx_for(project, tmp_path)
+    handle({**stop(project, main), "agent_transcript_path": str(child)}, ctx)
+    assert [r["data"]["message_id"] for r in rows(project)] == ["parent_1"]
+    handle(stop(project, main, "SubagentStop", session="s2"), ctx)  # no agent_transcript_path
+    assert len(rows(project)) == 1
 
 
 def test_message_time_is_used_and_a_future_time_is_not(project, tmp_path):
@@ -235,6 +271,15 @@ def test_message_time_is_used_and_a_future_time_is_not(project, tmp_path):
     old, new = rows(project)
     assert old["ts"].startswith("2026-01-02T03:04:05")
     assert datetime.fromisoformat(new["ts"]) <= datetime.now(UTC) + timedelta(seconds=5)
+
+
+def test_a_row_names_the_event_and_the_transcript_file_but_not_its_directory(project, tmp_path):
+    path = write(tmp_path / "t.jsonl", record())
+    handle(stop(project, path, "SessionEnd"), ctx_for(project, tmp_path))
+    (row,) = rows(project)
+    assert row["data"]["hook_event"] == "SessionEnd"
+    assert row["data"]["transcript_file"] == "t.jsonl"
+    assert str(tmp_path) not in json.dumps(row)
 
 
 def test_no_message_content_reaches_the_ledger(project, tmp_path):

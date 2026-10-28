@@ -25,7 +25,8 @@ class HookInput(BaseModel):
     hook_event_name: str = Field(min_length=1)
     session_id: str = Field(default="unknown", min_length=1)
     cwd: str | None = None
-    transcript_path: str | None = None
+    transcript_path: str | None = None  # the main session's transcript, on every event
+    agent_transcript_path: str | None = None  # SubagentStop: the subagent's own transcript
     permission_mode: str | None = None
     tool_name: str | None = None
     tool_input: dict[str, Any] = Field(default_factory=dict)

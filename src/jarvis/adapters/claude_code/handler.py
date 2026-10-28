@@ -319,8 +319,14 @@ def _config_change(inp: HookInput, ctx: HookContext) -> HookResult:
 def _capture_usage(inp: HookInput, ctx: HookContext) -> HookResult:
     """Record the session's model calls. Never blocks, in any mode: a failure here is an error
     record, not a refusal."""
-    if inp.transcript_path:
-        capture_usage(inp, ctx, _ledger(ctx))
+    # A subagent's calls are in its own file, which only SubagentStop names. On that event the
+    # main transcript is not read: it holds the parent's calls, which Stop and SessionEnd
+    # record under the parent's identity (verified in a live session, ADR 0008).
+    path = (
+        inp.agent_transcript_path if inp.hook_event_name == "SubagentStop" else inp.transcript_path
+    )
+    if path:
+        capture_usage(inp, ctx, _ledger(ctx), path)
     return HookResult()
 
 
