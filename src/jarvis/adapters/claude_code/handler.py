@@ -30,6 +30,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jarvis.core.killswitch import halt_path
 from jarvis.core.ledger import Ledger
 from jarvis.core.policy import run_check
 from jarvis.core.schemas import (
@@ -203,7 +204,14 @@ def _pre_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
     }
     try:
         verdict = run_check(
-            plan.action, policy, registry, project, ledger=_ledger(ctx), record=True, extra=extra
+            plan.action,
+            policy,
+            registry,
+            project,
+            ledger=_ledger(ctx),
+            record=True,
+            extra=extra,
+            halt_file=halt_path(ctx.state_dir),
         )
     finally:
         # Applied when the call is requested, not when it finishes: if PostToolUse never
