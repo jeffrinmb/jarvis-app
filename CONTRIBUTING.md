@@ -2,6 +2,8 @@
 
 Thanks for helping. This project is early, so the most useful contributions are small, tested and tied to a task in the [TODO list](docs/TODO.md).
 
+If you are an AI coding agent, or are setting one up, read [AGENTS.md](AGENTS.md) and [docs/HANDOFF.md](docs/HANDOFF.md) first.
+
 Please read the [charter](docs/framework-charter.md) sections 2 (principles) and 4 (autonomy tiers) first. The rules in them shape what gets accepted. In particular:
 
 - enforce boundaries in code, not in prompts;

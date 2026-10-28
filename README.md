@@ -72,6 +72,8 @@ More diagrams (decision routing, pipeline and gates, memory, learning loop, inje
 | [Traceability](docs/traceability.md) | Every requirement mapped to the tasks that deliver it, so nothing we decided to build is untracked |
 | [Threat model](docs/threat-model.md) | The ten OWASP agentic risks mapped to controls, gaps and red-team cases, plus threats specific to this framework |
 | [Schema changelog](docs/schema-changelog.md) | Versioning policy for the schemas, how to change one, and the change history |
+| [Agent instructions](AGENTS.md) | Rules and environment notes for any coding agent working here (Claude Code reads it through `CLAUDE.md`) |
+| [Handoff](docs/HANDOFF.md) | Current state, what is live, what waits for a decision and what to do next, for whoever picks the work up |
 | [Contributing](CONTRIBUTING.md) | Setup, checks to run, branch and pull request workflow, rules for AI-assisted contributions |
 | [Security policy](SECURITY.md) | How to report a vulnerability, and what counts as one for this project |
 
