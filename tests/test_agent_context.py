@@ -15,8 +15,15 @@ TODO = ROOT / "docs" / "TODO.md"
 
 CONTEXT_FILES = [AGENTS, CLAUDE, HANDOFF]
 
-# Paths that are mentioned on purpose but do not exist in a fresh checkout.
-LOCAL_ONLY = {".claude/settings.local.json", ".agents/ledger/", ".agents/ledger/events.jsonl"}
+# Paths that are mentioned on purpose but do not exist in a fresh checkout: they are created
+# on a developer's machine (hook wiring and the audit ledger) and are git-ignored. A test that
+# only passed because these exist locally would fail in CI.
+LOCAL_ONLY = {
+    ".claude/",
+    ".claude/settings.local.json",
+    ".agents/ledger/",
+    ".agents/ledger/events.jsonl",
+}
 ROOT_FILES = {
     "README.md",
     "AGENTS.md",
