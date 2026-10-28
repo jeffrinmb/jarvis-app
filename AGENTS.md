@@ -27,6 +27,8 @@ After changing a schema in `src/jarvis/core/schemas/`, run `uv run agentctl sche
 
 **Read the real exit code.** Piping pytest into `tail` or `head` hides a failure unless you run `set -o pipefail` first. That once let a failing test through.
 
+**Tests must pass on a clean checkout.** CI starts from a fresh clone, so a test must not depend on git-ignored or machine-local files (the `.claude/` folder, the ledger, your virtualenv). One did, and passed locally but failed in CI. When a test reads files, check it with `git worktree add --detach <dir> HEAD`, then `uv sync` and `uv run pytest` there.
+
 ## Layout
 
 - `src/jarvis/core/`: `schemas`, `ledger`, `policy` (the gate), `filelock`; the other packages (orchestrator, memory, gates, tools, security, evals, council) are stubs for later phases.

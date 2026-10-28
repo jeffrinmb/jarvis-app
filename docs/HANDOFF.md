@@ -68,6 +68,7 @@ The five biggest, from the [threat model](threat-model.md): role and agent ident
 - The claim that 18% of MCP deployments scope permissions could not be verified and is not used.
 - A hook that returns `allow` skips Claude Code's own prompts, so ours never does. A hook that crashes lets the call through on Claude Code before 2.1.295.
 - Piping `pytest` into `tail` without `set -o pipefail` once hid a failing test.
+- A test that read the git-ignored `.claude/` folder passed locally and failed in CI. Check file-reading tests in a clean checkout (see [AGENTS.md](../AGENTS.md)).
 
 ## How to resume
 
