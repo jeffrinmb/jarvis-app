@@ -14,6 +14,17 @@ budgets:
   loop_window: 40
   on_exceed: human
 
+# Unusual behaviour, judged from earlier decisions in the ledger. `alert` only records an
+# anomaly_detected event; `human` pauses the call for a person; `deny` stops it.
+anomalies:
+  max_denials: 5          # 5 denials among the task's last 20 decisions, however they vary
+  denial_window: 20
+  new_tool: true          # a never-used tool at medium risk or above, once there is a baseline
+  new_tool_min_history: 50
+  burst_calls: 60         # 60 calls by one task within a minute
+  burst_seconds: 60
+  on_anomaly: human
+
 auto_approve:
   - id: reads
     description: Reading files, searching and read-only shell commands

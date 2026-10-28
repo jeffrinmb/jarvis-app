@@ -36,7 +36,7 @@ from jarvis.core.schemas.policy import Condition, Rule
 from jarvis.core.schemas.verdict import MatchCategory, RuleMatch
 
 from .matching import matches_any, normalize_path
-from .usage import Usage
+from .usage import Anomaly, Usage
 
 SEVERITY: dict[Decision, int] = {
     Decision.ALLOW: 0,
@@ -131,6 +131,19 @@ def _builtin(rule_id: str, effect: Decision, reason: str) -> RuleMatch:
     return RuleMatch(rule_id=f"builtin:{rule_id}", category="builtin", effect=effect, reason=reason)
 
 
+def _anomaly_matches(policy: Policy, anomalies: list[Anomaly] | None) -> list[RuleMatch]:
+    """``alert`` records the anomaly elsewhere and does not change the decision. It must not
+    become an allow match, which would count as an approval."""
+    config = policy.anomalies
+    if config is None or not anomalies or config.on_anomaly == "alert":
+        return []
+    effect = Decision.DENY if config.on_anomaly == "deny" else Decision.HUMAN
+    return [
+        _builtin(a.rule_id.removeprefix("builtin:"), effect, f"anomaly: {a.reason}")
+        for a in anomalies
+    ]
+
+
 def _budget_matches(policy: Policy, usage: Usage | None) -> list[RuleMatch]:
     budgets = policy.budgets
     if budgets is None or usage is None:
@@ -174,11 +187,13 @@ def evaluate(
     prior_diff_lines: int = 0,
     usage: Usage | None = None,
     halted: str | None = None,
+    anomalies: list[Anomaly] | None = None,
 ) -> Verdict:
     """Decide what should happen to ``action``. Pure and deterministic.
 
     ``usage`` is what the task and the day have used so far (from the ledger) and ``halted``
-    is the kill switch's description when it is on. Both come from the caller, not the agent.
+    is the kill switch's description when it is on. ``anomalies`` are the detections for this
+    call (see ``usage.detect_anomalies``). All three come from the caller, not the agent.
     """
     tainted = TrustLabel.UNTRUSTED in {
         *action.session.trust_labels_seen,
@@ -317,6 +332,7 @@ def evaluate(
         )
 
     matches.extend(_budget_matches(policy, usage))
+    matches.extend(_anomaly_matches(policy, anomalies))
     matches.extend(_policy_matches(policy, facts))
 
     decision, reason = combine(matches, policy.default)

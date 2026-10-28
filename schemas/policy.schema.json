@@ -1,5 +1,94 @@
 {
   "$defs": {
+    "Anomalies": {
+      "additionalProperties": false,
+      "description": "Behaviour that is unusual for this ledger, counted from earlier decisions (task P2.8a).\n\nEvery detector is off until its fields are set. ``on_anomaly`` says what a detection does:\n``alert`` only records an ``anomaly_detected`` event, ``human`` pauses the call for a\nperson, ``deny`` stops it. It can never allow.",
+      "properties": {
+        "burst_calls": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trip at this many calls by one task within burst_seconds",
+          "title": "Burst Calls"
+        },
+        "burst_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Burst Seconds"
+        },
+        "denial_window": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Denial Window"
+        },
+        "max_denials": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trip when this many of the task's last denial_window decisions were denials, however the retries vary",
+          "title": "Max Denials"
+        },
+        "new_tool": {
+          "default": false,
+          "description": "Trip on a tool that has never been used in this ledger",
+          "title": "New Tool",
+          "type": "boolean"
+        },
+        "new_tool_min_history": {
+          "default": 50,
+          "description": "Do not judge newness until the ledger has this many earlier decisions that were not denied, so a fresh ledger does not flag everything",
+          "minimum": 1,
+          "title": "New Tool Min History",
+          "type": "integer"
+        },
+        "new_tool_risk_at_least": {
+          "$ref": "#/$defs/RiskClass",
+          "default": "medium"
+        },
+        "on_anomaly": {
+          "default": "human",
+          "enum": [
+            "alert",
+            "human",
+            "deny"
+          ],
+          "title": "On Anomaly",
+          "type": "string"
+        }
+      },
+      "title": "Anomalies",
+      "type": "object"
+    },
     "Budgets": {
       "additionalProperties": false,
       "description": "Limits counted from the audit ledger. An exceeded limit sends the call to ``on_exceed``.\n\nEvery field is optional and unset means no limit, so an old policy file behaves as before.\nCalls are decisions that did not end in deny, counted before the current call.",
@@ -221,6 +310,17 @@
   },
   "additionalProperties": false,
   "properties": {
+    "anomalies": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Anomalies"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "auto_approve": {
       "items": {
         "$ref": "#/$defs/Rule"

@@ -28,7 +28,7 @@ from jarvis.core.schemas.event import ToolRef
 from jarvis.core.schemas.verdict import RuleMatch
 
 from .engine import evaluate
-from .usage import compute_usage, fingerprint
+from .usage import Anomaly, compute_usage, detect_anomalies, fingerprint
 
 COUNTED = {Decision.ALLOW.value, Decision.COUNCIL.value, Decision.HUMAN.value}
 MAX_LOGGED_PATHS = 50
@@ -117,9 +117,12 @@ LIMIT_EVENTS = {
 }
 
 
-def _limit_events(action: Action, verdict: Verdict, version: str | None) -> list[Event]:
-    """A budget or loop trip is also its own event, so it can be searched and alerted on."""
-    return [
+def _limit_events(
+    action: Action, verdict: Verdict, version: str | None, anomalies: list[Anomaly]
+) -> list[Event]:
+    """A budget, loop or anomaly trip is also its own event, so it can be searched and alerted
+    on. Anomalies are recorded whatever ``on_anomaly`` says, including ``alert``."""
+    events = [
         Event(
             kind=LIMIT_EVENTS[m.rule_id],
             agent_id=action.agent_id,
@@ -132,6 +135,19 @@ def _limit_events(action: Action, verdict: Verdict, version: str | None) -> list
         for m in verdict.matches
         if m.rule_id in LIMIT_EVENTS
     ]
+    events += [
+        Event(
+            kind=EventKind.ANOMALY_DETECTED,
+            agent_id=action.agent_id,
+            on_behalf_of=action.on_behalf_of,
+            task_id=action.task_id,
+            tool=ToolRef(id=action.tool_id, version=version),
+            outcome=verdict.decision.value,
+            data={"rule_id": a.rule_id, "reason": a.reason},
+        )
+        for a in anomalies
+    ]
+    return events
 
 
 def run_check(
@@ -162,7 +178,10 @@ def run_check(
         with ledger.transaction() as tx:
             history = list(tx.records())
             prior = prior_diff_lines(history, action.task_id)
-            usage = compute_usage(history, action, policy.budgets, now or datetime.now(UTC))
+            usage = compute_usage(
+                history, action, policy.budgets, now or datetime.now(UTC), policy.anomalies
+            )
+            found = detect_anomalies(policy.anomalies, usage, tool.risk.rank if tool else None)
             verdict = evaluate(
                 action,
                 policy,
@@ -171,10 +190,11 @@ def run_check(
                 prior_diff_lines=prior,
                 usage=usage,
                 halted=halted,
+                anomalies=found,
             )
             if record:
                 tx.append(decision_event(action, verdict, version, extra))
-                for event in _limit_events(action, verdict, version):
+                for event in _limit_events(action, verdict, version, found):
                     tx.append(event)
         return verdict
     except (LedgerError, ValueError, OSError) as exc:

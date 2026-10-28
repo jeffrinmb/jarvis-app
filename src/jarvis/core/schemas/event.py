@@ -30,6 +30,7 @@ class EventKind(StrEnum):
     BUDGET_WARNING = "budget_warning"
     BUDGET_EXCEEDED = "budget_exceeded"
     LOOP_DETECTED = "loop_detected"
+    ANOMALY_DETECTED = "anomaly_detected"
     KILL_SWITCH = "kill_switch"
     ERROR = "error"
     NOTE = "note"
