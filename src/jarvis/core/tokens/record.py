@@ -10,6 +10,9 @@ so ``cost_usd`` is 0 and must not be read as free).
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Any
+
 from jarvis.core.ledger import Ledger
 from jarvis.core.schemas import Event, EventKind
 from jarvis.core.schemas.event import ModelRef, Usage
@@ -36,14 +39,20 @@ def model_call_event(
     outcome: str | None = None,
     trace_id: str | None = None,
     span_id: str | None = None,
+    ts: datetime | None = None,
+    extra_data: dict[str, Any] | None = None,
 ) -> Event:
-    """Build the row. A supplied ``cost_usd`` wins over the price table."""
+    """Build the row. A supplied ``cost_usd`` wins over the price table. ``ts`` is when the
+    call happened, if that is known and not now; ``extra_data`` is merged into ``data`` (it must
+    hold no content)."""
     if cost_usd is not None:
         cost, source = cost_usd, "reported"
     else:
         computed = prices.cost(model, tokens_in, tokens_out, tokens_cached) if prices else None
         cost, source = (computed, "computed") if computed is not None else (0.0, "unknown")
+    fields: dict[str, Any] = {} if ts is None else {"ts": ts}
     return Event(
+        **fields,
         kind=EventKind.MODEL_CALL,
         agent_id=agent_id,
         on_behalf_of=on_behalf_of,
@@ -56,7 +65,7 @@ def model_call_event(
             tokens_in=tokens_in, tokens_out=tokens_out, tokens_cached=tokens_cached, cost_usd=cost
         ),
         outcome=outcome,
-        data={"cost_source": source},
+        data={**(extra_data or {}), "cost_source": source},
     )
 
 

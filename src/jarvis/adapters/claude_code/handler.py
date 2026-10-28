@@ -45,6 +45,7 @@ from jarvis.core.schemas import (
 )
 from jarvis.core.schemas.event import ToolRef
 
+from .capture import capture_usage
 from .config import HookConfig, HookMode
 from .mapping import agent_identity, build_action, safe_session_id
 from .payload import HookInput
@@ -53,6 +54,7 @@ from .source import SourceError, SourceFile, TrustedSource, WorktreeSource
 
 SETTINGS_SOURCES = {"user_settings", "project_settings", "local_settings"}
 BLOCKING_EVENTS = {"PreToolUse", "ConfigChange"}
+USAGE_EVENTS = {"Stop", "SubagentStop", "SessionEnd"}
 MAX_REASON = 1500
 
 
@@ -122,6 +124,8 @@ def _dispatch(inp: HookInput, ctx: HookContext) -> HookResult:
         return _session_start(inp, ctx)
     if event == "ConfigChange":
         return _config_change(inp, ctx)
+    if event in USAGE_EVENTS:
+        return _capture_usage(inp, ctx)
     return HookResult()
 
 
@@ -309,6 +313,14 @@ def _config_change(inp: HookInput, ctx: HookContext) -> HookResult:
             "jarvis policy gate: changes to Claude Code settings are blocked during a session "
             "because they can remove the hook. Edit them outside the session.",
         )
+    return HookResult()
+
+
+def _capture_usage(inp: HookInput, ctx: HookContext) -> HookResult:
+    """Record the session's model calls. Never blocks, in any mode: a failure here is an error
+    record, not a refusal."""
+    if inp.transcript_path:
+        capture_usage(inp, ctx, _ledger(ctx))
     return HookResult()
 
 

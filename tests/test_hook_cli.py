@@ -222,6 +222,9 @@ def test_snippet_registers_every_handled_event_in_exec_form():
         "PostToolUse",
         "PostToolUseFailure",
         "ConfigChange",
+        "Stop",
+        "SubagentStop",
+        "SessionEnd",
     }
     handler = hooks["PreToolUse"][0]["hooks"][0]
     assert hooks["PreToolUse"][0]["matcher"] == "*"

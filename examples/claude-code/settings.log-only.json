@@ -71,6 +71,57 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentctl",
+            "args": [
+              "hook",
+              "run",
+              "--mode",
+              "log-only"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentctl",
+            "args": [
+              "hook",
+              "run",
+              "--mode",
+              "log-only"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentctl",
+            "args": [
+              "hook",
+              "run",
+              "--mode",
+              "log-only"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "ConfigChange": [
       {
         "hooks": [
