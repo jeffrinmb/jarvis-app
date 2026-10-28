@@ -34,8 +34,19 @@ def project(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
     monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("JARVIS_ON_BEHALF_OF", "alice")
-    monkeypatch.delenv("JARVIS_HOOK_MODE", raising=False)
+    for name in (
+        "JARVIS_HOOK_MODE",
+        "JARVIS_POLICY_SOURCE",
+        "JARVIS_POLICY_REF",
+        "JARVIS_POLICY_DIR",
+    ):
+        monkeypatch.delenv(name, raising=False)
     return root
+
+
+def protected(project):
+    """Arguments that read policy from a directory, which enforce mode requires (ADR 0004)."""
+    return ["--policy-source", "directory", "--policy-dir", str(project)]
 
 
 def send(monkeypatch, payload, *args):
@@ -73,20 +84,29 @@ def test_run_defaults_to_log_only_and_records(project, monkeypatch, capsys):
 
 
 def test_run_enforce_prints_the_decision_json(project, monkeypatch, capsys):
-    assert send(monkeypatch, edit(project, ".github/workflows/ci.yml"), "--mode", "enforce") == 0
+    assert (
+        send(
+            monkeypatch,
+            edit(project, ".github/workflows/ci.yml"),
+            "--mode",
+            "enforce",
+            *protected(project),
+        )
+        == 0
+    )
     out = json.loads(capsys.readouterr().out)
     assert out["hookSpecificOutput"]["permissionDecision"] == "ask"
 
 
 def test_mode_can_come_from_the_environment(project, monkeypatch, capsys):
     monkeypatch.setenv("JARVIS_HOOK_MODE", "enforce")
-    send(monkeypatch, edit(project, ".github/workflows/ci.yml"))
+    send(monkeypatch, edit(project, ".github/workflows/ci.yml"), *protected(project))
     assert "permissionDecision" in capsys.readouterr().out
 
 
 def test_mode_can_come_from_the_config_file(project, monkeypatch, capsys):
     (project / ".agents" / "claude-code.yaml").write_text("mode: enforce\n", encoding="utf-8")
-    send(monkeypatch, edit(project, ".github/workflows/ci.yml"))
+    send(monkeypatch, edit(project, ".github/workflows/ci.yml"), *protected(project))
     assert "permissionDecision" in capsys.readouterr().out
 
 
@@ -99,7 +119,9 @@ def test_invalid_json_blocks_only_in_enforce_mode(project, monkeypatch, capsys):
 def test_an_unreadable_config_blocks_in_enforce_and_not_in_log_only(project, monkeypatch):
     (project / ".agents" / "claude-code.yaml").write_text("mode: banana\n", encoding="utf-8")
     assert send(monkeypatch, edit(project, "docs/a.md")) == 0
-    assert send(monkeypatch, edit(project, "docs/a.md"), "--mode", "enforce") == 2
+    assert (
+        send(monkeypatch, edit(project, "docs/a.md"), "--mode", "enforce", *protected(project)) == 2
+    )
 
 
 def test_run_uses_the_project_directory_from_the_environment(project, monkeypatch):
@@ -221,9 +243,11 @@ def test_venv_runner_uses_the_project_python_directly():
 
 
 def test_enforce_snippet_blocks_on_hook_failure():
-    handler = build_settings(HookMode.ENFORCE)["hooks"]["PreToolUse"][0]["hooks"][0]
+    handler = build_settings(HookMode.ENFORCE, policy_source="git")["hooks"]["PreToolUse"][0][
+        "hooks"
+    ][0]
     assert handler["onFailure"] == "block"
-    assert handler["args"][-1] == "enforce"
+    assert handler["args"][:4] == ["hook", "run", "--mode", "enforce"]
 
 
 def test_uv_runner_goes_through_uv(project):
@@ -233,17 +257,18 @@ def test_uv_runner_goes_through_uv(project):
 
 
 def test_snippet_command_prints_valid_json(capsys):
-    assert main(["hook", "snippet", "--mode", "enforce"]) == 0
+    assert main(["hook", "snippet"]) == 0
     assert "hooks" in json.loads(capsys.readouterr().out)
 
 
 def test_shipped_settings_examples_match_the_generator():
-    for name, mode, runner in (
-        ("settings.log-only.json", HookMode.LOG_ONLY, "direct"),
-        ("settings.enforce.json", HookMode.ENFORCE, "uv"),
+    for name, mode, runner, source in (
+        ("settings.log-only.json", HookMode.LOG_ONLY, "direct", {}),
+        ("settings.enforce.json", HookMode.ENFORCE, "uv", {"policy_source": "git"}),
     ):
         shipped = json.loads((EXAMPLES / name).read_text(encoding="utf-8"))
-        assert shipped == build_settings(mode, runner), f"regenerate examples/claude-code/{name}"
+        generated = build_settings(mode, runner, **source)
+        assert shipped == generated, f"regenerate examples/claude-code/{name}"
 
 
 # ---------- versions and doctor ----------
@@ -282,13 +307,13 @@ def test_log_only_works_on_any_known_version():
 
 def test_doctor_fails_for_enforce_on_an_old_version(project, monkeypatch, capsys):
     monkeypatch.setattr(hook_cli, "_claude_version_text", lambda: "2.1.276 (Claude Code)")
-    assert main(["hook", "doctor", "--mode", "enforce"]) == 1
+    assert main(["hook", "doctor", "--mode", "enforce", *protected(project)]) == 1
     assert "PROBLEM" in capsys.readouterr().out
 
 
 def test_doctor_passes_when_version_and_files_are_fine(project, monkeypatch, capsys):
     monkeypatch.setattr(hook_cli, "_claude_version_text", lambda: "2.1.300 (Claude Code)")
-    assert main(["hook", "doctor", "--mode", "enforce"]) == 0
+    assert main(["hook", "doctor", "--mode", "enforce", *protected(project)]) == 0
     assert "PROBLEM" not in capsys.readouterr().out
 
 

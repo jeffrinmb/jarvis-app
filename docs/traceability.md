@@ -57,7 +57,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 | Gap or threat | Tasks | Status |
 |---|---|---|
 | G1: `role` and `agent_id` are claimed, not authenticated (ASI03, RT-08) | P2.9, P2.9a | Planned; must precede enforcing mode |
-| G2: policy, registry and project files are ordinary files (T-2, RT-15) | P2.4b, P4.2 | Planned |
+| G2: policy, registry and project files are ordinary files (T-2, RT-15) | P2.4b, P4.2 | Partly built: trusted policy source, ADR 0004; the sandbox is planned |
 | G4: ledger events are unsigned (ASI07, RT-12) | P2.9b | Planned |
 | G5: no kill switch or anomaly detection (ASI08, ASI10, RT-14) | P2.8, P2.8a | Planned |
 | T-1: ledger truncation or rewrite | P2.1a, P2.1b | Partly built: anchors exist, automation planned |

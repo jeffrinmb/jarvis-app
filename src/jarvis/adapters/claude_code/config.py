@@ -133,9 +133,15 @@ class HookConfig(StrictModel):
     lock_timeout_seconds: float = Field(default=3.0, gt=0)
 
 
+def parse_config(text: str | None) -> HookConfig:
+    """Parse adapter config text; ``None`` means no config file, so the safe defaults apply."""
+    if text is None:
+        return HookConfig()
+    return HookConfig.model_validate(yaml.safe_load(text) or {})
+
+
 def load_config(path: str | Path | None) -> HookConfig:
     """Load the config file if it exists; otherwise return the safe defaults."""
     if path is None or not Path(path).exists():
         return HookConfig()
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    return HookConfig.model_validate(data)
+    return parse_config(Path(path).read_text(encoding="utf-8"))
