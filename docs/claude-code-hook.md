@@ -74,9 +74,21 @@ The hook reads the policy, tool registry, project file and its own adapter confi
 
 Pin a **full commit SHA** with `--policy-ref`: a branch name can be moved by an agent that has a shell, until the sandbox (P4.2) stops it. The options can also come from `JARVIS_POLICY_SOURCE`, `JARVIS_POLICY_REF` and `JARVIS_POLICY_DIR`. They are deliberately not settable in the adapter config, which the agent could edit. `agentctl hook snippet --policy-source git --policy-ref <sha>` writes them into the settings block, and `agentctl hook doctor` shows which source and file hashes are in use.
 
+## Stopping everything, and limits
+
+```bash
+agentctl halt      # deny every action until `resume`
+agentctl status    # exit 1 while the kill switch is on
+agentctl resume
+```
+
+The kill switch is a `HALT` file in the same per-user state directory the hook uses, outside the project ([ADR 0005](adr/0005-budgets-loop-breaker-and-kill-switch.md)). While it exists the hook's gate denies every call, reads included; in log-only mode it records that and still never blocks. If the file cannot be read it counts as on.
+
+The policy can also carry a `budgets` block (see `examples/claude-code/policy.yaml`): calls per task and per day, and a loop breaker for the same call repeated. A tripped limit sends the call to a human (or denies, with `on_exceed: deny`). Counting from the ledger means a budget only holds while the ledger is intact (G4). An agent with a shell could delete the `HALT` file until the sandbox (P4.2) is in place.
+
 ## What is recorded
 
-Every decision records: the tool and its registry id, the project-relative paths, the verdict and the rule ids that produced it, the session id, the permission mode, the tool-use id, whether the session was tainted, the policy source (for example `git:<ref>@<commit prefix>`) and whether it is protected, and a SHA-256 of the policy, registry and project files in force. The ledger is hash-chained, so edits to it are detected.
+Every decision records: the tool and its registry id, the project-relative paths, the verdict and the rule ids that produced it, the session id, the permission mode, the tool-use id, whether the session was tainted, a fingerprint of the tool and paths (for the loop breaker), the policy source (for example `git:<ref>@<commit prefix>`) and whether it is protected, and a SHA-256 of the policy, registry and project files in force. The ledger is hash-chained, so edits to it are detected.
 
 **Never recorded:** file contents, command text, tool output or error text. Secret redaction proper arrives with P2.12, so for now the hook simply keeps that material out.
 

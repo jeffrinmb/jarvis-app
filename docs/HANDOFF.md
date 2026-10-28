@@ -8,18 +8,18 @@ The current state of the work, written for whoever picks it up next: another per
 
 ## Where things stand
 
-The project is an early build. Pull requests 1 to 13 are merged to `main`, and no pull request is open at the time of writing.
+The project is an early build. Pull requests 1 to 14 are merged to `main`, and no pull request is open at the time of writing.
 
 **Built, tested and merged**
 
 - **Schemas** for events, tasks, decision cards, policy, tool registry, wiki notes, project config, actions and verdicts, with a versioning policy and changelog ([schema-changelog.md](schema-changelog.md)).
 - **Audit ledger**: a hash-chained JSONL file, with `agentctl log`, `verify` and `head`, and anchors to detect truncation and rewrites.
 - **Policy gate** (`agentctl check`): allow, council, human or deny, with built-in guardrails, taint tracking, the lethal-trifecta rule and cumulative limits that hold under concurrency. It fails closed ([ADR 0002](adr/0002-policy-evaluation-and-fail-closed-rules.md)).
-- **Claude Code hook** (`agentctl hook run`, `snippet`, `doctor`, `report`): builds the gate's action from the real tool call. Log-only by default ([ADR 0003](adr/0003-claude-code-hook-interface.md), [the guide](claude-code-hook.md)). It can read policy from a git commit or an outside directory, and enforce mode refuses the agent-writable working tree ([ADR 0004](adr/0004-trusted-policy-source.md), `P2.4b`).
+- **Claude Code hook** (`agentctl hook run`, `snippet`, `doctor`, `report`): builds the gate's action from the real tool call. Log-only by default ([ADR 0003](adr/0003-claude-code-hook-interface.md), [the guide](claude-code-hook.md)). `agentctl halt` and `resume` are a kill switch, and the policy can carry call budgets and a loop breaker ([ADR 0005](adr/0005-budgets-loop-breaker-and-kill-switch.md), `P2.8`). It can read policy from a git commit or an outside directory, and enforce mode refuses the agent-writable working tree ([ADR 0004](adr/0004-trusted-policy-source.md), `P2.4b`).
 - **CI**: Linux and Windows, Python 3.12 and 3.13, lint, format, about 390 tests, a secret scan over the full history, actions pinned to commit SHAs, and a single required check, `ci-ok`.
-- **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0004.
+- **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0005.
 
-**Not built yet:** approvals and decision cards, identity and signed events, budgets and a kill switch, the token ledger, OpenTelemetry export, memory (the wiki), the orchestrator and pipeline, brownfield tooling, evals, the council and the visual layer. See [TODO.md](TODO.md).
+**Not built yet:** approvals and decision cards, identity and signed events, anomaly rules, per-stage and token budgets, the token ledger, OpenTelemetry export, memory (the wiki), the orchestrator and pipeline, brownfield tooling, evals, the council and the visual layer. See [TODO.md](TODO.md).
 
 ## Live on the maintainer's machine
 
@@ -44,7 +44,7 @@ The project is an early build. Pull requests 1 to 13 are merged to `main`, and n
 
 In this order, and why:
 
-1. **`P2.8` and `P2.8a`** budgets, loop breaker, kill switch and anomaly rules. Independent of the open decisions and closes gap G5.
+1. **`P2.8a`** anomaly rules on the ledger (repeated denials with variations, a tool never used before, new domains). Budgets, the loop breaker and the kill switch are built (`P2.8`).
 2. **`P2.2`** token and cost ledger. `P2.3` (OpenTelemetry) first needs the `P0.3` decision on the observability convention.
 3. **`P2.9`, `P2.9a`, `P2.9b`** identity, authenticated roles and signed events (gaps G1 and G4). It needs a decision on how identity and signing work, which is tracked as `P0.15`.
 4. **`P2.7`** the approval flow, then **`P2.10`**.
@@ -52,7 +52,7 @@ In this order, and why:
 
 ## Known gaps and risks
 
-The five biggest, from the [threat model](threat-model.md): role and agent identity are claimed and not authenticated (G1); the policy files are agent-writable unless a git or directory source is used, and a shell can still move a git ref (G2, narrowed by P2.4b); ledger events are unsigned (G4); there is no kill switch (G5); and the hook has only been tested with synthetic payloads and in log-only mode, never in enforce mode.
+The five biggest, from the [threat model](threat-model.md): role and agent identity are claimed and not authenticated (G1); the policy files are agent-writable unless a git or directory source is used, and a shell can still move a git ref (G2, narrowed by P2.4b); ledger events are unsigned (G4); the kill switch and budgets only cover calls that go through the gate (G5, narrowed by P2.8); and the hook has only been tested with synthetic payloads and in log-only mode, never in enforce mode.
 
 ## Not verified
 
