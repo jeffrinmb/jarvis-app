@@ -86,6 +86,10 @@ The kill switch is a `HALT` file in the same per-user state directory the hook u
 
 The policy can also carry a `budgets` block (see `examples/claude-code/policy.yaml`): calls per task and per day, and a loop breaker for the same call repeated. A tripped limit sends the call to a human (or denies, with `on_exceed: deny`). An `anomalies` block adds detectors for repeated denials (however the retries vary), a tool never used before and bursts of calls, each recorded as an `anomaly_detected` event and set to alert, pause for a human or deny ([ADR 0006](adr/0006-anomaly-rules.md)). Counting from the ledger means a budget or detector only holds while the ledger is intact (G4). An agent with a shell could delete the `HALT` file until the sandbox (P4.2) is in place.
 
+## Token and cost ledger
+
+The hook does not see token counts, so it does not record model calls yet (task P2.2a). The ledger itself exists: `agentctl tokens record --agent A --on-behalf-of H --model M --tokens-in N --tokens-out N [--tokens-cached N] [--cost-usd X | --prices examples/prices.yaml]` writes one row, and `agentctl tokens report [--by model|task|agent|stage|day]` summarises them, flags calls whose cost is unknown and shows the cache hit rate. See [ADR 0007](adr/0007-token-and-cost-ledger.md). The example price table is illustrative, not real prices.
+
 ## What is recorded
 
 Every decision records: the tool and its registry id, the project-relative paths, the verdict and the rule ids that produced it, the session id, the permission mode, the tool-use id, whether the session was tainted, a fingerprint of the tool and paths (for the loop breaker), the policy source (for example `git:<ref>@<commit prefix>`) and whether it is protected, and a SHA-256 of the policy, registry and project files in force. The ledger is hash-chained, so edits to it are detected.
