@@ -8,7 +8,7 @@ The current state of the work, written for whoever picks it up next: another per
 
 ## Where things stand
 
-The project is an early build. Pull requests 1 to 11 are merged to `main`. At the time of writing, the only open pull request is the one that adds this file.
+The project is an early build. Pull requests 1 to 12 are merged to `main`, and no pull request is open at the time of writing.
 
 **Built, tested and merged**
 
@@ -16,7 +16,7 @@ The project is an early build. Pull requests 1 to 11 are merged to `main`. At th
 - **Audit ledger**: a hash-chained JSONL file, with `agentctl log`, `verify` and `head`, and anchors to detect truncation and rewrites.
 - **Policy gate** (`agentctl check`): allow, council, human or deny, with built-in guardrails, taint tracking, the lethal-trifecta rule and cumulative limits that hold under concurrency. It fails closed ([ADR 0002](adr/0002-policy-evaluation-and-fail-closed-rules.md)).
 - **Claude Code hook** (`agentctl hook run`, `snippet`, `doctor`, `report`): builds the gate's action from the real tool call. Log-only by default ([ADR 0003](adr/0003-claude-code-hook-interface.md), [the guide](claude-code-hook.md)).
-- **CI**: Linux and Windows, Python 3.12 and 3.13, lint, format, about 370 tests, a secret scan over the full history, actions pinned to commit SHAs, and a single required check, `ci-ok`.
+- **CI**: Linux and Windows, Python 3.12 and 3.13, lint, format, about 390 tests, a secret scan over the full history, actions pinned to commit SHAs, and a single required check, `ci-ok`.
 - **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0003.
 
 **Not built yet:** approvals and decision cards, identity and signed events, budgets and a kill switch, the token ledger, OpenTelemetry export, memory (the wiki), the orchestrator and pipeline, brownfield tooling, evals, the council and the visual layer. See [TODO.md](TODO.md).
