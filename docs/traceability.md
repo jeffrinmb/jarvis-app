@@ -26,7 +26,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | 14 | Governed tool and MCP access | Charter 8.3 | P4.4, P4.5, P4.5a, P4.6 | Planned |
 | 15 | Prompt-injection resistance | Charter 8.5 | P2.5, P2.6b, P4.4b, P4.12, P4.12a, P6.4 | Partly built: taint and the trifecta rule |
 | 16 | Software supply chain | Charter 8.6 | P1.5, P1.5a, P1.5b, P4.11, P4.11a, P7.12a | Partly built: pinned actions, lockfile, secret scan |
-| 17 | Agent identity and short-lived credentials | Charter 8.4 | P2.9, P2.9a, P2.9b | Planned |
+| 17 | Agent identity and short-lived credentials | Charter 8.4 | P0.15, P2.9, P2.9a, P2.9b | Planned |
 | 18 | Observability with OpenTelemetry and one trace id | Charter 8.7 | P2.3 | Planned |
 | 19 | Evals, red team and regression tests for the framework itself | Charter 8.10 | P2.11, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.7, P6.8 | Planned |
 | 20 | Governance and regulatory alignment | Charter 8.11 | P0.6, P2.1b, P7.11 | Planned |

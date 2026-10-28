@@ -30,7 +30,8 @@ Goal: agree what we are building, who owns it, and where it is piloted.
 - [ ] **P0.11** Decide whether OpenHands should be evaluated as a runtime or design reference before building our own orchestrator (FO, PL)
 - [x] **P0.12** Start the framework decisions log: ADR 0001 (language, storage, layout) and ADR 0002 (policy rules) exist, with a template in `docs/adr/0000-template.md` (FO)
 - [ ] **P0.13** Choose the final project name and check it: "Jarvis" is a common name that may clash with existing products or trademarks, the Python package name `jarvis-agentic` must be available if it will be published, and BMAD's trademarks must not be used (FO)
-- [ ] **P0.14** Resolve the charter's remaining open decisions: where the event bus and visual layer are hosted (local or shared), which content pack ships first and whether importers are needed on day one, whether the pilot has a 2D timeline only, and the stated reason for any second harness or model provider (FO, PL)
+- [ ] **P0.14** Resolve the charter's remaining open decisions: where the event bus and visual layer are hosted (local or shared), which content pack ships first and whether importers are needed on day one, whether the pilot has a 2D timeline only, which channel delivers decision cards (email, chat or GitHub comments), and the stated reason for any second harness or model provider (FO, PL)
+- [ ] **P0.15** Decide how identity and signing work, which the identity tasks need: how agents and humans authenticate, where signing keys live, and whether to use GitHub identity, per-agent local keys or an external identity provider (FO, PS)
 
 Exit check: owners named, decisions and pilots recorded, baselines captured.
 
@@ -82,7 +83,7 @@ Goal: every action is logged, risky actions are stopped, humans can approve with
 - [ ] **P2.7c** Card evidence comes from the gate's verdict (matched rules, taint and trifecta flags) and the real diff, not from text the agent wrote (ASI09, RT-13) (PS)
 - [ ] **P2.8** Budgets per task, stage and day; loop breaker; kill switch (PL)
 - [ ] **P2.8a** Anomaly rules on the ledger: repeated denied actions, a tool never used before, unusual data volumes, calls to new domains. Alert or pause the task (ASI10, RT-14) (PS)
-- [ ] **P2.9** Agent identities and "on behalf of" fields; credential broker stub with short-lived, task-scoped credentials issued only for an approved task (PS)
+- [ ] **P2.9** Agent identities and "on behalf of" fields; credential broker stub with short-lived, task-scoped credentials issued only for an approved task. Needs the P0.15 decision (PS)
 - [ ] **P2.9a** Authenticate `role` and `agent_id` so a caller cannot claim another role (threat model gap G1, RT-08). Must be done before the gate is switched to enforcing (PS)
 - [ ] **P2.9b** Sign ledger events so a forged append is detectable (threat model gap G4, RT-12) (PS)
 - [ ] **P2.10** Review the log-only data (how often would the gate have blocked, how many overrides), tune thresholds, then switch to enforcing. Enforcing mode needs Claude Code 2.1.295 or later for `onFailure: block`, and P2.9a must be done first (PS, FO)
@@ -99,7 +100,7 @@ Exit check: a risky action is blocked and approved by a named human, the hash ch
 Goal: knowledge compiled once, retrieved cheaply, validated before it is trusted.
 
 - [ ] **P3.1** Vault template: folders, `AGENTS.md` schema, `index.md`, `log.md`, note templates (ME)
-- [ ] **P3.1a** Project-context block in `AGENTS.md`: setup, adopt, refresh and audit operations, each line stamped with the commit it was verified against, kept small (ME)
+- [ ] **P3.1a** Project-context block in `AGENTS.md`: setup, adopt, refresh and audit operations, each line stamped with the commit it was verified against, kept small. _A hand-written first version exists (`AGENTS.md` and `docs/HANDOFF.md`, checked by tests); the tooling that creates and refreshes it is still to do._ (ME)
 - [ ] **P3.2** Inbox write gate, promotion command, trust levels, supersede links (ME, PS)
 - [ ] **P3.3** Ingest job: a merged PR or retrospective updates affected pages and appends to `log.md` (ME)
 - [ ] **P3.3a** Query operation: read `index.md` and the relevant pages; good answers are filed back as new inbox pages so knowledge compounds (ME)

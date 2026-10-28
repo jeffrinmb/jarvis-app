@@ -15,6 +15,8 @@ MARKDOWN_FILES = [
     ROOT / "README.md",
     ROOT / "CONTRIBUTING.md",
     ROOT / "SECURITY.md",
+    ROOT / "AGENTS.md",
+    ROOT / "CLAUDE.md",
     *sorted(DOCS.rglob("*.md")),
 ]
 
