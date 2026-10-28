@@ -1,5 +1,76 @@
 {
   "$defs": {
+    "Budgets": {
+      "additionalProperties": false,
+      "description": "Limits counted from the audit ledger. An exceeded limit sends the call to ``on_exceed``.\n\nEvery field is optional and unset means no limit, so an old policy file behaves as before.\nCalls are decisions that did not end in deny, counted before the current call.",
+      "properties": {
+        "loop_threshold": {
+          "anyOf": [
+            {
+              "minimum": 2,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trip when the same tool on the same paths is called this many times within loop_window calls of one task",
+          "title": "Loop Threshold"
+        },
+        "loop_window": {
+          "anyOf": [
+            {
+              "minimum": 2,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loop Window"
+        },
+        "max_calls_per_day": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "All tasks in this ledger, per UTC day",
+          "title": "Max Calls Per Day"
+        },
+        "max_calls_per_task": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Calls Per Task"
+        },
+        "on_exceed": {
+          "default": "human",
+          "enum": [
+            "human",
+            "deny"
+          ],
+          "title": "On Exceed",
+          "type": "string"
+        }
+      },
+      "title": "Budgets",
+      "type": "object"
+    },
     "Condition": {
       "additionalProperties": false,
       "description": "All specified fields must match. Unspecified fields match anything.",
@@ -156,6 +227,17 @@
       },
       "title": "Auto Approve",
       "type": "array"
+    },
+    "budgets": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Budgets"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "council_review": {
       "items": {

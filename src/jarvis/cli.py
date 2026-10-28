@@ -19,6 +19,8 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
+from jarvis.adapters.claude_code import default_state_dir
+from jarvis.core.killswitch import clear_halt, halt_path, read_halt, set_halt
 from jarvis.core.ledger import Ledger, LedgerError
 from jarvis.core.policy import run_check
 from jarvis.core.schemas import (
@@ -108,11 +110,24 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     check.add_argument("--project", help="project.yaml with enabled tools and no-go paths")
     check.add_argument("--ledger", help=f"default: $JARVIS_LEDGER or {DEFAULT_LEDGER}")
+    check.add_argument("--state-dir", help="where the kill switch lives (default: user state)")
     check.add_argument(
         "--no-log",
         action="store_true",
         help="dry run: read history for cumulative limits but do not record the decision",
     )
+
+    halt = sub.add_parser("halt", help="kill switch: deny every action until `resume`")
+    halt.add_argument("--ledger")
+    halt.add_argument("--state-dir", help="default: the user state directory the hook uses")
+    halt.add_argument("--by", help="who is stopping the agents (default: $JARVIS_ON_BEHALF_OF)")
+    resume = sub.add_parser("resume", help="turn the kill switch off")
+    resume.add_argument("--ledger")
+    resume.add_argument("--state-dir")
+    resume.add_argument("--by")
+    status = sub.add_parser("status", help="show whether the kill switch is on (exit 1 if on)")
+    status.add_argument("--ledger")
+    status.add_argument("--state-dir")
 
     schema = sub.add_parser("schema", help="schema tools")
     schema_sub = schema.add_subparsers(dest="schema_command", required=True)
@@ -165,6 +180,53 @@ def _build_event(args: argparse.Namespace) -> Event:
     return Event(**{k: v for k, v in fields.items() if v is not None})
 
 
+def _halt_file(args: argparse.Namespace) -> Path:
+    state = getattr(args, "state_dir", None)
+    return halt_path(Path(state) if state else default_state_dir())
+
+
+def _record_switch(ledger: Ledger, state: str, by: str | None) -> None:
+    """Best effort: the switch works even when the ledger does not."""
+    try:
+        ledger.append(
+            Event(
+                kind=EventKind.KILL_SWITCH,
+                agent_id="agentctl",
+                on_behalf_of=by or os.environ.get("JARVIS_ON_BEHALF_OF") or "unknown",
+                outcome=state,
+                data={"state": state},
+            )
+        )
+    except Exception as exc:
+        print(f"note: the ledger was not updated ({type(exc).__name__})", file=sys.stderr)
+
+
+def _switch_command(args: argparse.Namespace, ledger: Ledger) -> int:
+    path = _halt_file(args)
+    if args.command == "halt":
+        try:
+            halt = set_halt(path, args.by)
+        except OSError as exc:
+            print(f"cannot set the kill switch at {path}: {type(exc).__name__}", file=sys.stderr)
+            return 1
+        _record_switch(ledger, "on", halt.by)
+        print(f"kill switch ON: every action is denied until `agentctl resume` ({path})")
+        return 0
+    if args.command == "resume":
+        try:
+            was_on = clear_halt(path)
+        except OSError as exc:
+            print(f"cannot clear the kill switch at {path}: {type(exc).__name__}", file=sys.stderr)
+            return 1
+        if was_on:
+            _record_switch(ledger, "off", args.by)
+        print("kill switch OFF" if was_on else "kill switch was already off")
+        return 0
+    halt = read_halt(path)
+    print(halt.describe() if halt else "kill switch is off")
+    return 1 if halt else 0
+
+
 def _load_action(source: str) -> Action:
     text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
     return Action.model_validate(yaml.safe_load(text))  # YAML is a superset of JSON
@@ -182,7 +244,13 @@ def _check_command(args: argparse.Namespace, ledger: Ledger) -> int:
     use_ledger = ledger if not (args.no_log and not ledger.path.exists()) else None
     try:
         verdict = run_check(
-            action, policy, registry, project, ledger=use_ledger, record=not args.no_log
+            action,
+            policy,
+            registry,
+            project,
+            ledger=use_ledger,
+            record=not args.no_log,
+            halt_file=_halt_file(args),
         )
     except Exception as exc:  # the gate must fail closed on any unexpected error
         print(f"internal error, denying: {exc!r}", file=sys.stderr)
@@ -206,6 +274,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "check":
         return _check_command(args, ledger)
+
+    if args.command in ("halt", "resume", "status"):
+        return _switch_command(args, ledger)
 
     if args.command == "log":
         try:

@@ -7,8 +7,11 @@ audited is not allowed.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from jarvis.core.killswitch import read_halt
 from jarvis.core.ledger import Ledger, LedgerError
 from jarvis.core.schemas import (
     Action,
@@ -25,6 +28,7 @@ from jarvis.core.schemas.event import ToolRef
 from jarvis.core.schemas.verdict import RuleMatch
 
 from .engine import evaluate
+from .usage import compute_usage, fingerprint
 
 COUNTED = {Decision.ALLOW.value, Decision.COUNCIL.value, Decision.HUMAN.value}
 MAX_LOGGED_PATHS = 50
@@ -96,6 +100,7 @@ def decision_event(
             "trifecta": verdict.trifecta,
             "environment": action.environment.value,
             "paths": action.paths[:MAX_LOGGED_PATHS],
+            "fingerprint": fingerprint(action.tool_id, action.paths),
             "matches": [
                 {"rule_id": m.rule_id, "category": m.category, "effect": m.effect.value}
                 for m in verdict.matches
@@ -103,6 +108,30 @@ def decision_event(
             "context": dict(extra or {}),
         },
     )
+
+
+LIMIT_EVENTS = {
+    "builtin:budget-task-calls": EventKind.BUDGET_EXCEEDED,
+    "builtin:budget-day-calls": EventKind.BUDGET_EXCEEDED,
+    "builtin:loop-detected": EventKind.LOOP_DETECTED,
+}
+
+
+def _limit_events(action: Action, verdict: Verdict, version: str | None) -> list[Event]:
+    """A budget or loop trip is also its own event, so it can be searched and alerted on."""
+    return [
+        Event(
+            kind=LIMIT_EVENTS[m.rule_id],
+            agent_id=action.agent_id,
+            on_behalf_of=action.on_behalf_of,
+            task_id=action.task_id,
+            tool=ToolRef(id=action.tool_id, version=version),
+            outcome=verdict.decision.value,
+            data={"rule_id": m.rule_id, "reason": m.reason},
+        )
+        for m in verdict.matches
+        if m.rule_id in LIMIT_EVENTS
+    ]
 
 
 def run_check(
@@ -113,23 +142,40 @@ def run_check(
     ledger: Ledger | None = None,
     record: bool = True,
     extra: dict[str, Any] | None = None,
+    halt_file: Path | None = None,
+    now: datetime | None = None,
 ) -> Verdict:
     """Evaluate ``action`` and, when a ledger is given and ``record`` is true, log the verdict.
 
     With a ledger, history is read and the decision is appended under one lock, so concurrent
     checks for the same task see each other's decisions. ``extra`` is stored with the event.
+    ``halt_file`` is the kill switch (task P2.8); ``now`` exists so tests can fix the day.
     """
+    halt = read_halt(halt_file) if halt_file is not None else None
+    halted = halt.describe() if halt is not None else None
     if ledger is None:
-        return evaluate(action, policy, registry, project)
+        return evaluate(action, policy, registry, project, halted=halted)
 
     tool = next((t for t in registry.tools if t.id == action.tool_id), None)
     version = tool.version if tool else None
     try:
         with ledger.transaction() as tx:
-            prior = prior_diff_lines(tx.records(), action.task_id)
-            verdict = evaluate(action, policy, registry, project, prior_diff_lines=prior)
+            history = list(tx.records())
+            prior = prior_diff_lines(history, action.task_id)
+            usage = compute_usage(history, action, policy.budgets, now or datetime.now(UTC))
+            verdict = evaluate(
+                action,
+                policy,
+                registry,
+                project,
+                prior_diff_lines=prior,
+                usage=usage,
+                halted=halted,
+            )
             if record:
                 tx.append(decision_event(action, verdict, version, extra))
+                for event in _limit_events(action, verdict, version):
+                    tx.append(event)
         return verdict
     except (LedgerError, ValueError, OSError) as exc:
         return _fail_closed(policy, action, f"audit ledger unavailable: {exc}")

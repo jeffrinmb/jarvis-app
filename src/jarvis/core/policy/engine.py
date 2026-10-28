@@ -36,6 +36,7 @@ from jarvis.core.schemas.policy import Condition, Rule
 from jarvis.core.schemas.verdict import MatchCategory, RuleMatch
 
 from .matching import matches_any, normalize_path
+from .usage import Usage
 
 SEVERITY: dict[Decision, int] = {
     Decision.ALLOW: 0,
@@ -130,18 +131,69 @@ def _builtin(rule_id: str, effect: Decision, reason: str) -> RuleMatch:
     return RuleMatch(rule_id=f"builtin:{rule_id}", category="builtin", effect=effect, reason=reason)
 
 
+def _budget_matches(policy: Policy, usage: Usage | None) -> list[RuleMatch]:
+    budgets = policy.budgets
+    if budgets is None or usage is None:
+        return []
+    effect = budgets.on_exceed
+    found: list[RuleMatch] = []
+    # `usage` counts earlier calls, so this call is the next one: limit reached means trip.
+    if budgets.max_calls_per_task is not None and usage.task_calls >= budgets.max_calls_per_task:
+        found.append(
+            _builtin(
+                "budget-task-calls",
+                effect,
+                f"task has used its budget of {budgets.max_calls_per_task} calls",
+            )
+        )
+    if budgets.max_calls_per_day is not None and usage.day_calls >= budgets.max_calls_per_day:
+        found.append(
+            _builtin(
+                "budget-day-calls",
+                effect,
+                f"today's budget of {budgets.max_calls_per_day} calls is used",
+            )
+        )
+    if budgets.loop_threshold is not None and usage.repeats + 1 >= budgets.loop_threshold:
+        found.append(
+            _builtin(
+                "loop-detected",
+                effect,
+                f"the same call was made {budgets.loop_threshold} times within "
+                f"{budgets.loop_window} calls",
+            )
+        )
+    return found
+
+
 def evaluate(
     action: Action,
     policy: Policy,
     registry: ToolRegistry,
     project: ProjectConfig | None = None,
     prior_diff_lines: int = 0,
+    usage: Usage | None = None,
+    halted: str | None = None,
 ) -> Verdict:
-    """Decide what should happen to ``action``. Pure and deterministic."""
+    """Decide what should happen to ``action``. Pure and deterministic.
+
+    ``usage`` is what the task and the day have used so far (from the ledger) and ``halted``
+    is the kill switch's description when it is on. Both come from the caller, not the agent.
+    """
     tainted = TrustLabel.UNTRUSTED in {
         *action.session.trust_labels_seen,
         *action.input_trust,
     }
+
+    if halted is not None:  # nothing else matters while the switch is on
+        match = _builtin("kill-switch", Decision.DENY, halted)
+        return Verdict(
+            decision=Decision.DENY,
+            reason=match.reason,
+            policy_version=policy.version,
+            tainted=tainted,
+            matches=[match],
+        )
 
     tool = next((t for t in registry.tools if t.id == action.tool_id), None)
     if tool is None:
@@ -264,6 +316,7 @@ def evaluate(
             )
         )
 
+    matches.extend(_budget_matches(policy, usage))
     matches.extend(_policy_matches(policy, facts))
 
     decision, reason = combine(matches, policy.default)

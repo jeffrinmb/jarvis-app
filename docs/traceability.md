@@ -12,9 +12,9 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 |---|---|---|---|---|
 | 1 | AI across the SDLC inside enforced boundaries (autonomy tiers) | Charter 4 | P2.4, P2.5, P4.1, P4.2, P4.15 | Partly built: the policy gate |
 | 2 | Only major decisions reach a human | Charter 4.1 | P2.4, P2.7, P2.7a, P2.7b, P2.7c, P2.10, P2.10a, P6.10 | Partly built: the gate decides; approvals planned |
-| 3 | Human in the loop: park and resume, attributed approvals, override and stop | Charter 4, 8.11 | P2.7, P2.8, P4.1, P7.7 | Planned |
+| 3 | Human in the loop: park and resume, attributed approvals, override and stop | Charter 4, 8.11 | P2.7, P2.8, P4.1, P7.7 | Partly built: the kill switch (`agentctl halt`); approvals planned |
 | 4 | Council for high-risk decisions | Charter 4.2 | P7.1, P7.1a | Planned |
-| 5 | Token optimisation and proper token usage | Charter 7.3, 8.1, 8.2 | P2.2, P2.8, P3.5, P4.4a, P4.7a, P6.3 | Planned |
+| 5 | Token optimisation and proper token usage | Charter 7.3, 8.1, 8.2 | P2.2, P2.8, P2.8b, P3.5, P4.4a, P4.7a, P6.3 | Planned |
 | 6 | The right model for each task (routing) | Charter 8.1 | P4.3, P4.7, P4.7b, P7.2, P7.4 | Planned |
 | 7 | Auditability | Charter 8.7 | P2.1, P2.1a, P2.1b, P2.3, P2.12, P3.5a, P4.14 | Partly built: the hash-chained ledger |
 | 8 | Accountability: named humans, no self-approval | Charter 8.11, 9 | P0.1, P2.7, P2.9, P2.9a, P2.9b | Partly built: rules in the schemas |
@@ -59,7 +59,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 | G1: `role` and `agent_id` are claimed, not authenticated (ASI03, RT-08) | P2.9, P2.9a | Planned; must precede enforcing mode |
 | G2: policy, registry and project files are ordinary files (T-2, RT-15) | P2.4b, P4.2 | Partly built: trusted policy source, ADR 0004; the sandbox is planned |
 | G4: ledger events are unsigned (ASI07, RT-12) | P2.9b | Planned |
-| G5: no kill switch or anomaly detection (ASI08, ASI10, RT-14) | P2.8, P2.8a | Planned |
+| G5: no kill switch or anomaly detection (ASI08, ASI10, RT-14) | P2.8, P2.8a | Partly built: budgets, loop breaker and kill switch (ADR 0005); anomaly rules planned |
 | T-1: ledger truncation or rewrite | P2.1a, P2.1b | Partly built: anchors exist, automation planned |
 | T-3: the action is not the real tool call (RT-03) | P2.6, P2.6a, P2.6b | Partly built: tested with realistic payloads |
 | T-11: the hook is removed, disabled or bypassed (RT-18 to RT-20) | P2.6, P2.6c, P4.2, P4.15 | Planned |

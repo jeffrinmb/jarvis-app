@@ -4,6 +4,16 @@ schema_version: 1
 version: claude-code-0.1.0
 default: human
 
+# Limits counted from the ledger. A tripped limit sends the call to a human (on_exceed: deny stops
+# it outright). Tune these from `agentctl hook report` before enforcing: re-running the same test
+# command on the same paths looks like a loop, so keep the threshold generous.
+budgets:
+  max_calls_per_task: 500
+  max_calls_per_day: 3000
+  loop_threshold: 15
+  loop_window: 40
+  on_exceed: human
+
 auto_approve:
   - id: reads
     description: Reading files, searching and read-only shell commands

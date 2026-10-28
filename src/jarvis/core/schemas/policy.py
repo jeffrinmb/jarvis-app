@@ -71,6 +71,39 @@ class Rule(StrictModel):
     when: Condition = Field(default_factory=Condition)
 
 
+class Budgets(StrictModel):
+    """Limits counted from the audit ledger. An exceeded limit sends the call to ``on_exceed``.
+
+    Every field is optional and unset means no limit, so an old policy file behaves as before.
+    Calls are decisions that did not end in deny, counted before the current call.
+    """
+
+    max_calls_per_task: int | None = Field(default=None, gt=0)
+    max_calls_per_day: int | None = Field(
+        default=None, gt=0, description="All tasks in this ledger, per UTC day"
+    )
+    loop_threshold: int | None = Field(
+        default=None,
+        ge=2,
+        description="Trip when the same tool on the same paths is called this many times "
+        "within loop_window calls of one task",
+    )
+    loop_window: int | None = Field(default=None, ge=2)
+    on_exceed: Literal[Decision.HUMAN, Decision.DENY] = Decision.HUMAN
+
+    @model_validator(mode="after")
+    def _check(self) -> Budgets:
+        if (self.loop_threshold is None) != (self.loop_window is None):
+            raise ValueError("loop_threshold and loop_window must be set together")
+        if (
+            self.loop_threshold is not None
+            and self.loop_window is not None
+            and self.loop_window < self.loop_threshold
+        ):
+            raise ValueError("loop_window is smaller than loop_threshold; it could never trip")
+        return self
+
+
 class Policy(StrictModel):
     schema_version: Literal[1] = SCHEMA_VERSION
     version: str = Field(min_length=1, description="Policy version, recorded in audit events")
@@ -79,6 +112,7 @@ class Policy(StrictModel):
     council_review: list[Rule] = Field(default_factory=list)
     human_required: list[Rule] = Field(default_factory=list)
     never: list[Rule] = Field(default_factory=list)
+    budgets: Budgets | None = None
 
     @model_validator(mode="after")
     def _check(self) -> Policy:
