@@ -18,7 +18,7 @@ from jarvis.core.policy import compute_usage, evaluate, fingerprint, run_check
 from jarvis.core.schemas import Action, Decision, EventKind, Policy
 from jarvis.core.schemas.policy import Budgets
 
-NOW = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
+NOW = datetime.now(UTC)  # events carry the real clock, so the tests must too
 
 
 def policy(**budgets):

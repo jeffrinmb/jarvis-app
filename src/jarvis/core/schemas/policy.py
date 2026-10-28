@@ -104,6 +104,52 @@ class Budgets(StrictModel):
         return self
 
 
+class Anomalies(StrictModel):
+    """Behaviour that is unusual for this ledger, counted from earlier decisions (task P2.8a).
+
+    Every detector is off until its fields are set. ``on_anomaly`` says what a detection does:
+    ``alert`` only records an ``anomaly_detected`` event, ``human`` pauses the call for a
+    person, ``deny`` stops it. It can never allow.
+    """
+
+    max_denials: int | None = Field(
+        default=None,
+        gt=0,
+        description="Trip when this many of the task's last denial_window decisions were "
+        "denials, however the retries vary",
+    )
+    denial_window: int | None = Field(default=None, gt=0)
+    new_tool: bool = Field(
+        default=False, description="Trip on a tool that has never been used in this ledger"
+    )
+    new_tool_min_history: int = Field(
+        default=50,
+        ge=1,
+        description="Do not judge newness until the ledger has this many earlier decisions "
+        "that were not denied, so a fresh ledger does not flag everything",
+    )
+    new_tool_risk_at_least: RiskClass = RiskClass.MEDIUM
+    burst_calls: int | None = Field(
+        default=None, gt=0, description="Trip at this many calls by one task within burst_seconds"
+    )
+    burst_seconds: int | None = Field(default=None, gt=0)
+    on_anomaly: Literal["alert", "human", "deny"] = "human"
+
+    @model_validator(mode="after")
+    def _check(self) -> Anomalies:
+        if (self.max_denials is None) != (self.denial_window is None):
+            raise ValueError("max_denials and denial_window must be set together")
+        if (
+            self.max_denials is not None
+            and self.denial_window is not None
+            and self.denial_window < self.max_denials
+        ):
+            raise ValueError("denial_window is smaller than max_denials; it could never trip")
+        if (self.burst_calls is None) != (self.burst_seconds is None):
+            raise ValueError("burst_calls and burst_seconds must be set together")
+        return self
+
+
 class Policy(StrictModel):
     schema_version: Literal[1] = SCHEMA_VERSION
     version: str = Field(min_length=1, description="Policy version, recorded in audit events")
@@ -113,6 +159,7 @@ class Policy(StrictModel):
     human_required: list[Rule] = Field(default_factory=list)
     never: list[Rule] = Field(default_factory=list)
     budgets: Budgets | None = None
+    anomalies: Anomalies | None = None
 
     @model_validator(mode="after")
     def _check(self) -> Policy:

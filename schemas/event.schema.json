@@ -30,6 +30,7 @@
         "budget_warning",
         "budget_exceeded",
         "loop_detected",
+        "anomaly_detected",
         "kill_switch",
         "error",
         "note"
