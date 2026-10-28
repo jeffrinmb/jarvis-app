@@ -10,6 +10,7 @@
 |---|---|
 | `PreToolUse` | Builds an action from the **real tool call** (tool, arguments, paths, edit size), asks the gate, records the decision, and in enforce mode turns it into a Claude Code decision |
 | `PostToolUse`, `PostToolUseFailure` | Records that the call ran or failed, and updates what the session has been exposed to |
+| `Stop`, `SubagentStop`, `SessionEnd` | Records the session's model calls (tokens, cache use, cost) from the transcript; never blocks |
 | `SessionStart` | Starts a fresh session record (a resumed session keeps its exposure) |
 | `ConfigChange` | Records edits to Claude Code settings, and in enforce mode blocks them so the hook cannot be removed mid-session |
 
@@ -88,7 +89,7 @@ The policy can also carry a `budgets` block (see `examples/claude-code/policy.ya
 
 ## Token and cost ledger
 
-The hook does not see token counts, so it does not record model calls yet (task P2.2a). The ledger itself exists: `agentctl tokens record --agent A --on-behalf-of H --model M --tokens-in N --tokens-out N [--tokens-cached N] [--cost-usd X | --prices examples/prices.yaml]` writes one row, and `agentctl tokens report [--by model|task|agent|stage|day]` summarises them, flags calls whose cost is unknown and shows the cache hit rate. See [ADR 0007](adr/0007-token-and-cost-ledger.md). The example price table is illustrative, not real prices.
+The hook does not see token counts in its input, but every event carries `transcript_path`, so on `Stop`, `SubagentStop` and `SessionEnd` it reads the usage in Claude Code's session transcript and writes one `model_call` row per message ([ADR 0008](adr/0008-token-capture-from-transcripts.md)). The transcript format is **not documented by Anthropic**: the reader takes only numbers, a model name and a message id, de-duplicates by message id (one response is written as several records), and skips anything it cannot trust, so a format change gives fewer rows and never wrong ones. It is safe to run repeatedly. Set `prices_path` in the adapter config to a price table (read through the policy source) to compute costs; otherwise costs are recorded as unknown, which the report flags. `--minimal` snippets do not capture usage. You can also write rows by hand: `agentctl tokens record --agent A --on-behalf-of H --model M --tokens-in N --tokens-out N [--tokens-cached N] [--cost-usd X | --prices examples/prices.yaml]` writes one row, and `agentctl tokens report [--by model|task|agent|stage|day]` summarises them, flags calls whose cost is unknown and shows the cache hit rate. See [ADR 0007](adr/0007-token-and-cost-ledger.md). The example price table is illustrative, not real prices.
 
 ## What is recorded
 
