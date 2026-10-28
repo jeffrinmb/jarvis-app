@@ -14,7 +14,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | 2 | Only major decisions reach a human | Charter 4.1 | P2.4, P2.7, P2.7a, P2.7b, P2.7c, P2.10, P2.10a, P6.10 | Partly built: the gate decides; approvals planned |
 | 3 | Human in the loop: park and resume, attributed approvals, override and stop | Charter 4, 8.11 | P2.7, P2.8, P4.1, P7.7 | Partly built: the kill switch (`agentctl halt`); approvals planned |
 | 4 | Council for high-risk decisions | Charter 4.2 | P7.1, P7.1a | Planned |
-| 5 | Token optimisation and proper token usage | Charter 7.3, 8.1, 8.2 | P2.2, P2.2a, P2.8, P2.8b, P3.5, P4.4a, P4.7a, P6.3 | Partly built: the token and cost ledger and report (ADR 0007); capture and budgets planned |
+| 5 | Token optimisation and proper token usage | Charter 7.3, 8.1, 8.2 | P2.2, P2.2a, P2.2b, P2.8, P2.8b, P3.5, P4.4a, P4.7a, P6.3 | Partly built: the token and cost ledger, report and Claude Code capture (ADR 0007, 0008); budgets planned |
 | 6 | The right model for each task (routing) | Charter 8.1 | P4.3, P4.7, P4.7b, P7.2, P7.4 | Planned |
 | 7 | Auditability | Charter 8.7 | P2.1, P2.1a, P2.1b, P2.3, P2.12, P3.5a, P4.14 | Partly built: the hash-chained ledger |
 | 8 | Accountability: named humans, no self-approval | Charter 8.11, 9 | P0.1, P2.7, P2.9, P2.9a, P2.9b | Partly built: rules in the schemas |

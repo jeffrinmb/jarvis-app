@@ -50,7 +50,8 @@ def build_settings(
     Exec form (``args``) is used so no shell is involved. Enforce mode adds
     ``"onFailure": "block"`` so a failed hook blocks the call (Claude Code 2.1.295 or later).
 
-    ``minimal`` registers only ``PreToolUse``, ``SessionStart`` and ``ConfigChange``. Exposure
+    ``minimal`` registers only ``PreToolUse``, ``SessionStart`` and ``ConfigChange`` (so no
+    token capture, which needs ``Stop``, ``SubagentStop`` and ``SessionEnd``). Exposure
     is applied when a call is requested, so ``PostToolUse`` is not needed for safety; leaving
     it out halves the per-call cost (each hook start is about a second today) at the price of
     not recording whether calls succeeded.
@@ -84,6 +85,10 @@ def build_settings(
     if not minimal:
         hooks["PostToolUse"] = [matched]
         hooks["PostToolUseFailure"] = [matched]
+        # Token capture (P2.2a): once per turn, session end and subagent end.
+        hooks["Stop"] = [entry]
+        hooks["SubagentStop"] = [entry]
+        hooks["SessionEnd"] = [entry]
     hooks["ConfigChange"] = [entry]
     return {"hooks": hooks}
 

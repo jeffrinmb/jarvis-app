@@ -44,6 +44,11 @@ class HookConfig(StrictModel):
     registry_path: str = ".agents/tool-registry.yaml"
     project_path: str | None = None
     ledger_path: str = ".agents/ledger/events.jsonl"
+    prices_path: str | None = Field(
+        default=None,
+        description="Price table (examples/prices.yaml) used to cost model calls captured from "
+        "the transcript. Read through the policy source. Unset means costs are unknown.",
+    )
 
     # Claude Code tool name -> registry tool id. Merged over the built-in table in mapping.py.
     tool_map: dict[str, str] = Field(default_factory=dict)
