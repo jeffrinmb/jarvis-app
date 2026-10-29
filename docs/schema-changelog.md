@@ -38,6 +38,8 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 | Schema | Version |
 |---|---|
 | `action` | 1 |
+| `approval-grant` | 1 |
+| `approval-request` | 1 |
 | `decision-card` | 1 |
 | `event` | 1 |
 | `policy` | 1 |
@@ -52,6 +54,11 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 ## Changelog
 
 ### Unreleased
+
+- New schemas `approval-request` and `approval-grant` (version 1): the `data` of `approval_requested` and `approval_granted` events. A request is built by the gate from its verdict and carries a proposed scope. A grant is one person's approval of a bounded, expiring scope; a prompt approval (`via: claude-code-prompt`) is a record of one call and has no scope. Scope globs that match everything, tool globs and a single-use scope without an exact call are rejected (task P2.7, [ADR 0009](adr/0009-approval-flow.md)).
+- `policy`: new `approvals` block (`max_scope_hours`, default 24, between 1 and 168; `approvers`, a list of names allowed to approve). Both have defaults, so existing policies behave as before except that approvals now exist.
+- `verdict`: new optional `approval_request` (the request a person can answer) and `approval_grant_ids` (the grants that let the call through), and a new rule category `approval`. Consumers must treat an unknown category as not allowed.
+- Data convention: `approval_denied` events written by `agentctl approvals reject` revoke earlier grants for that request. `policy_decision` events carry `data.approval_grant_ids` and `data.approval_request`.
 
 - New schema `price-table` (version 1): dollars per million tokens per model, with `as_of` and `source`, used to compute the cost of a model call when the provider did not report one (task P2.2, [ADR 0007](adr/0007-token-and-cost-ledger.md)).
 - Data convention, no schema change: `model_call` events carry `data.cost_source` (`reported`, `computed` or `unknown`). `usage.tokens_in` means input tokens not served from a cache; `usage.tokens_cached` means those that were.
