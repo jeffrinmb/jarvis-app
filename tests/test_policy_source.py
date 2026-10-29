@@ -186,7 +186,9 @@ def test_enforce_with_no_source_given_also_refuses(repo):
 def test_log_only_may_use_the_working_tree_and_records_the_source(repo):
     result = handle(edit_ci(repo), ctx(repo, HookMode.LOG_ONLY, None))
     assert result.exit_code == 0
-    (record,) = Ledger(repo.ledger).records()
+    (record,) = [
+        r for r in Ledger(repo.ledger).records() if r["event"]["kind"] == "policy_decision"
+    ]
     context = record["event"]["data"]["context"]
     assert context["policy_source"] == "worktree"
     assert context["policy_source_protected"] is False
@@ -210,7 +212,9 @@ def test_tampering_with_the_working_tree_policy_does_not_loosen_enforcement(repo
 
 def test_each_decision_records_the_commit_and_hashes_it_was_judged_by(repo):
     handle(edit_ci(repo), ctx(repo, HookMode.ENFORCE, GitSource(repo.root, repo.sha)))
-    (record,) = Ledger(repo.ledger).records()
+    (record,) = [
+        r for r in Ledger(repo.ledger).records() if r["event"]["kind"] == "policy_decision"
+    ]
     context = record["event"]["data"]["context"]
     assert context["policy_source"] == f"git:{repo.sha}@{repo.sha[:12]}"
     assert context["policy_source_protected"] is True

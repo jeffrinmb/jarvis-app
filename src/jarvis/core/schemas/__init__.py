@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .action import Action, SessionState
+from .approval import ApprovalGrant, ApprovalRequest, ApprovalScope, ProposedScope
 from .common import (
     SCHEMA_VERSION,
     Approval,
@@ -39,6 +40,8 @@ from .wiki import WikiFrontmatter
 
 SCHEMAS: dict[str, type[BaseModel]] = {
     "action": Action,
+    "approval-grant": ApprovalGrant,
+    "approval-request": ApprovalRequest,
     "decision-card": DecisionCard,
     "event": Event,
     "policy": Policy,
@@ -73,6 +76,9 @@ __all__ = [
     "SCHEMAS",
     "SCHEMA_VERSION",
     "Action",
+    "ApprovalGrant",
+    "ApprovalRequest",
+    "ApprovalScope",
     "Approval",
     "DataClass",
     "Decision",
@@ -82,6 +88,7 @@ __all__ = [
     "Event",
     "EventKind",
     "Policy",
+    "ProposedScope",
     "PriceTable",
     "ProjectConfig",
     "RiskClass",

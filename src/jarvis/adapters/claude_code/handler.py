@@ -43,11 +43,12 @@ from jarvis.core.schemas import (
     parse_tool_registry,
     parse_yaml_model,
 )
+from jarvis.core.schemas.approval import ApprovalGrant
 from jarvis.core.schemas.event import ToolRef
 
 from .capture import capture_usage
 from .config import HookConfig, HookMode
-from .mapping import agent_identity, build_action, safe_session_id
+from .mapping import agent_identity, build_action, on_behalf_of, safe_session_id
 from .payload import HookInput
 from .session import SessionStore
 from .source import SourceError, SourceFile, TrustedSource, WorktreeSource
@@ -222,17 +223,27 @@ def _pre_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
         # arrives, the exposure is still counted. A call the gate then blocks is counted too,
         # which is the conservative side.
         store.update(inp.session_id, plan.exposure)
-    return _pre_result(verdict, ctx)
+    return _pre_result(verdict, ctx, inp, plan.action.tool_id)
 
 
-def _pre_result(verdict: Verdict, ctx: HookContext) -> HookResult:
+def _pre_result(
+    verdict: Verdict, ctx: HookContext, inp: HookInput | None = None, tool_id: str = ""
+) -> HookResult:
     if not ctx.enforcing or verdict.decision == Decision.ALLOW:
         return HookResult()
     if verdict.decision == Decision.DENY or ctx.cfg.non_interactive:
         permission = "deny"
     else:
         permission = "ask"
-    reason = f"jarvis policy gate ({verdict.decision.value}): {verdict.reason}"[:MAX_REASON]
+    reason = f"jarvis policy gate ({verdict.decision.value}): {verdict.reason}"
+    if verdict.approval_request:
+        reason += (
+            f" [approval request {verdict.approval_request}: a person can answer it with "
+            f"`agentctl approvals approve {verdict.approval_request}`]"
+        )
+    reason = reason[:MAX_REASON]
+    if permission == "ask" and inp is not None:
+        _mark_ask(ctx, inp, verdict, tool_id)
     output = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -246,6 +257,7 @@ def _pre_result(verdict: Verdict, ctx: HookContext) -> HookResult:
 def _post_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
     if not inp.tool_name:
         return HookResult()
+    _record_prompt_approval(inp, ctx)
     from jarvis.core.schemas.action import SessionState
 
     plan = build_action(inp, ctx.cfg, str(ctx.project_dir), SessionState())
@@ -314,6 +326,75 @@ def _config_change(inp: HookInput, ctx: HookContext) -> HookResult:
             "because they can remove the hook. Edit them outside the session.",
         )
     return HookResult()
+
+
+def _ask_dir(ctx: HookContext) -> Path:
+    return ctx.state_dir / "asks"
+
+
+def _ask_marker(ctx: HookContext, tool_use_id: str | None) -> Path | None:
+    return _ask_dir(ctx) / f"{safe_session_id(tool_use_id)}.json" if tool_use_id else None
+
+
+def _mark_ask(ctx: HookContext, inp: HookInput, verdict: Verdict, tool_id: str) -> None:
+    """Remember that a person was asked about this call. If the call then runs, the person said
+    yes in the terminal, and ``PostToolUse`` records it as an attributed approval. Best effort:
+    a missing marker only means no approval record, never a wrong one."""
+    marker = _ask_marker(ctx, inp.tool_use_id)
+    if marker is None:
+        return
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(
+            json.dumps(
+                {
+                    "request": verdict.approval_request,
+                    "tool": tool_id,
+                    "decision": verdict.decision.value,
+                }
+            ),
+            encoding="utf-8",
+        )
+    except OSError:
+        return
+
+
+def _record_prompt_approval(inp: HookInput, ctx: HookContext) -> None:
+    marker = _ask_marker(ctx, inp.tool_use_id)
+    if marker is None or inp.hook_event_name != "PostToolUse":
+        return
+    try:
+        asked = json.loads(marker.read_text(encoding="utf-8"))
+        marker.unlink()
+    except (OSError, ValueError):
+        return
+    if not isinstance(asked, dict):
+        return
+    request = asked.get("request")
+    approver = on_behalf_of(ctx.cfg)
+    grant = ApprovalGrant(
+        request_id=request if isinstance(request, str) else None,
+        tool_use_id=inp.tool_use_id,
+        approver=approver,
+        via="claude-code-prompt",
+    )
+    agent_id, _ = agent_identity(inp, ctx.cfg)
+    _ledger(ctx).append(
+        Event(
+            kind=EventKind.APPROVAL_GRANTED,
+            agent_id="jarvis-hook",
+            on_behalf_of=approver,
+            task_id=f"claude-{safe_session_id(inp.session_id)}",
+            tool=ToolRef(id=str(asked.get("tool") or "unknown")),
+            outcome="allowed-in-prompt",
+            data={
+                "grant": grant.model_dump(mode="json"),
+                "decision": asked.get("decision"),
+                "requested_by": agent_id,
+                "context": _context(inp, ctx),
+            },
+        )
+    )
 
 
 def _capture_usage(inp: HookInput, ctx: HookContext) -> HookResult:

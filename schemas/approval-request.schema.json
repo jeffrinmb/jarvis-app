@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "ProposedScope": {
+      "additionalProperties": false,
+      "description": "What an approval would cover, before it has an owner or an expiry.",
+      "properties": {
+        "fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restricts the approval to one exact call",
+          "title": "Fingerprint"
+        },
+        "max_diff_lines": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cumulative changed lines for the task; unset is valid only for read-only tools",
+          "title": "Max Diff Lines"
+        },
+        "paths": {
+          "description": "Path globs. Empty covers only actions that touch no path",
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "single_use": {
+          "default": false,
+          "title": "Single Use",
+          "type": "boolean"
+        },
+        "tools": {
+          "description": "Exact registry tool ids, never globs",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tools"
+      ],
+      "title": "ProposedScope",
+      "type": "object"
+    },
+    "RequestRule": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "effect": {
+          "enum": [
+            "human",
+            "council"
+          ],
+          "title": "Effect",
+          "type": "string"
+        },
+        "rule_id": {
+          "minLength": 1,
+          "title": "Rule Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "category",
+        "effect"
+      ],
+      "title": "RequestRule",
+      "type": "object"
+    },
+    "RiskClass": {
+      "description": "Ordered from least to most risky; use ``rank`` to compare.",
+      "enum": [
+        "read",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskClass",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "enum": [
+        "human",
+        "council"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "diff_lines": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Diff Lines",
+      "type": "integer"
+    },
+    "diff_size_known": {
+      "default": true,
+      "title": "Diff Size Known",
+      "type": "boolean"
+    },
+    "fingerprint": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Fingerprint",
+      "type": "string"
+    },
+    "four_eyes": {
+      "default": false,
+      "description": "Two different approvers are needed",
+      "title": "Four Eyes",
+      "type": "boolean"
+    },
+    "paths": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Paths",
+      "type": "array"
+    },
+    "proposed_scope": {
+      "$ref": "#/$defs/ProposedScope"
+    },
+    "request_id": {
+      "pattern": "^req-[0-9a-f]{12}$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "risk": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RiskClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rules": {
+      "items": {
+        "$ref": "#/$defs/RequestRule"
+      },
+      "title": "Rules",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "tainted": {
+      "default": false,
+      "title": "Tainted",
+      "type": "boolean"
+    },
+    "task_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task Id"
+    },
+    "tool_id": {
+      "minLength": 1,
+      "title": "Tool Id",
+      "type": "string"
+    },
+    "total_diff_lines": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Total Diff Lines",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "request_id",
+    "tool_id",
+    "fingerprint",
+    "decision",
+    "proposed_scope"
+  ],
+  "title": "ApprovalRequest",
+  "type": "object"
+}

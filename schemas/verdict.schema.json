@@ -33,7 +33,8 @@
             "human_required",
             "never",
             "builtin",
-            "registry"
+            "registry",
+            "approval"
           ],
           "title": "Category",
           "type": "string"
@@ -64,6 +65,27 @@
   },
   "additionalProperties": false,
   "properties": {
+    "approval_grant_ids": {
+      "description": "Grants that let this call through; a single-use grant is spent by it",
+      "items": {
+        "type": "string"
+      },
+      "title": "Approval Grant Ids",
+      "type": "array"
+    },
+    "approval_request": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Id of the approval request a person can answer to let this call through",
+      "title": "Approval Request"
+    },
     "decision": {
       "$ref": "#/$defs/Decision"
     },

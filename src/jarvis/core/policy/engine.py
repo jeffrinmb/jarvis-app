@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from jarvis.core.approvals import Grant, covering_grants, profile_for
 from jarvis.core.schemas import (
     Action,
     DataClass,
@@ -36,7 +37,7 @@ from jarvis.core.schemas.policy import Condition, Rule
 from jarvis.core.schemas.verdict import MatchCategory, RuleMatch
 
 from .matching import matches_any, normalize_path
-from .usage import Anomaly, Usage
+from .usage import Anomaly, Usage, fingerprint
 
 SEVERITY: dict[Decision, int] = {
     Decision.ALLOW: 0,
@@ -144,6 +145,47 @@ def _anomaly_matches(policy: Policy, anomalies: list[Anomaly] | None) -> list[Ru
     ]
 
 
+def _apply_approvals(verdict: Verdict, facts: _Facts, grants: list[Grant]) -> Verdict:
+    """Turn a human or council verdict into allow when enough valid approvals cover the call.
+
+    Only a verdict whose every restrictive reason may be approved is lifted, and never a deny
+    (see ``approvals.rules``). Anything uncertain leaves the verdict as it was.
+    """
+    action, tool = facts.action, facts.tool
+    profile = profile_for(verdict.matches, tool)
+    if not profile.approvable:
+        return verdict
+    covering = covering_grants(
+        grants,
+        agent_id=action.agent_id,
+        task_id=action.task_id,
+        tool=tool,
+        paths=action.paths,
+        call_fingerprint=fingerprint(action.tool_id, action.paths),
+        total_diff=facts.total_diff,
+        size_known=facts.size_known,
+        profile=profile,
+    )
+    approvers = sorted({g.approver for g in covering})
+    if len(approvers) < (2 if profile.four_eyes else 1):
+        return verdict
+    reason = "approved by " + ", ".join(approvers) + f" (request {covering[0].request_id})"
+    approval = RuleMatch(
+        rule_id=f"approval:{covering[0].request_id}",
+        category="approval",
+        effect=Decision.ALLOW,
+        reason=reason,
+    )
+    return verdict.model_copy(
+        update={
+            "decision": Decision.ALLOW,
+            "reason": reason,
+            "matches": [*verdict.matches, approval],
+            "approval_grant_ids": [g.grant_id for g in covering],
+        }
+    )
+
+
 def _budget_matches(policy: Policy, usage: Usage | None) -> list[RuleMatch]:
     budgets = policy.budgets
     if budgets is None or usage is None:
@@ -188,12 +230,14 @@ def evaluate(
     usage: Usage | None = None,
     halted: str | None = None,
     anomalies: list[Anomaly] | None = None,
+    grants: list[Grant] | None = None,
 ) -> Verdict:
     """Decide what should happen to ``action``. Pure and deterministic.
 
     ``usage`` is what the task and the day have used so far (from the ledger) and ``halted``
     is the kill switch's description when it is on. ``anomalies`` are the detections for this
-    call (see ``usage.detect_anomalies``). All three come from the caller, not the agent.
+    call (see ``usage.detect_anomalies``). ``grants`` are the approvals that still count (see
+    ``jarvis.core.approvals``). All four come from the caller, not the agent.
     """
     tainted = TrustLabel.UNTRUSTED in {
         *action.session.trust_labels_seen,
@@ -336,7 +380,7 @@ def evaluate(
     matches.extend(_policy_matches(policy, facts))
 
     decision, reason = combine(matches, policy.default)
-    return Verdict(
+    verdict = Verdict(
         decision=decision,
         reason=reason,
         policy_version=policy.version,
@@ -347,3 +391,6 @@ def evaluate(
         total_diff_lines=total_diff,
         matches=matches,
     )
+    if grants and decision in (Decision.HUMAN, Decision.COUNCIL):
+        verdict = _apply_approvals(verdict, facts, grants)
+    return verdict
