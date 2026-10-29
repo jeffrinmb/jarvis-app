@@ -456,9 +456,9 @@ Do not start with the council, router or 3D world: they depend on the ledger and
 1. Core language (default: Python) and whether a compiled daemon is needed later.
 2. First pilot repos, stacks and ticketing/CI systems (Jira or Azure DevOps; GitHub or GitLab).
 3. Second harness and second model provider, and the reason for each.
-4. Where the vault lives (per repo by default) and who owns it.
+4. Where the vault lives (per repo by default) and who owns it. **Decided (ADR 0011): per repository, in `.agents/vault/`.** Who owns it is still open (P0.1).
 5. Hosting for the event bus and viz (local vs. shared).
-6. Observability convention: OTel GenAI vs. OpenInference.
+6. Observability convention: OTel GenAI vs. OpenInference. **Decided (ADR 0011): OTel GenAI, pinned.**
 7. Durable execution engine timing (own store vs. LangGraph-style vs. Temporal).
 8. Compliance scope and applicable regulatory dates (compliance owner).
 9. Licence handling for reused upstream text or code: BMAD and nebula are MIT; BMAD's trademarks are excluded from the MIT grant; the `llm-council` repository's licence is not stated on its page and its author says it is unsupported, so do not reuse its code.

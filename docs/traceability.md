@@ -26,7 +26,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | 14 | Governed tool and MCP access | Charter 8.3 | P4.4, P4.5, P4.5a, P4.6 | Planned |
 | 15 | Prompt-injection resistance | Charter 8.5 | P2.5, P2.6b, P4.4b, P4.12, P4.12a, P6.4 | Partly built: taint and the trifecta rule |
 | 16 | Software supply chain | Charter 8.6 | P1.5, P1.5a, P1.5b, P4.11, P4.11a, P7.12a | Partly built: pinned actions, lockfile, secret scan |
-| 17 | Agent identity and short-lived credentials | Charter 8.4 | P0.15, P2.9, P2.9a, P2.9b | Planned |
+| 17 | Agent identity and short-lived credentials | Charter 8.4 | P0.15, P0.16, P2.9, P2.9a, P2.9b, P2.9c | Decided (ADR 0010); nothing built yet |
 | 18 | Observability with OpenTelemetry and one trace id | Charter 8.7 | P2.3 | Planned |
 | 19 | Evals, red team and regression tests for the framework itself | Charter 8.10 | P2.11, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.7, P6.8 | Planned |
 | 20 | Governance and regulatory alignment | Charter 8.11 | P0.6, P2.1b, P7.11 | Planned |
@@ -74,7 +74,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 |---|---|---|
 | Schemas as the contract, with a changelog | P1.1, P1.2, P1.3, P1.4 | Built |
 | Threat model | P1.7 | Built |
-| Decisions log and ADRs | P0.3, P0.12, P1.6 | Partly built: ADRs 0001 and 0002 |
+| Decisions log and ADRs | P0.3, P0.12, P1.6 | Partly built: ADRs 0001 to 0011 |
 | Repository settings, licence and copyright | P0.10, P0.10a | Partly built |
 | Project name and trademarks | P0.13 | Decision |
 | Policy gate follow-ups: per-day limits, an index, path-derived risk | P2.4, P2.4a | Partly built |
