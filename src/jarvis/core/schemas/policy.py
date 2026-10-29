@@ -150,6 +150,19 @@ class Anomalies(StrictModel):
         return self
 
 
+class ApprovalSettings(StrictModel):
+    """Limits on approvals, enforced by the gate whenever it counts one (task P2.7)."""
+
+    max_scope_hours: int = Field(
+        default=24, ge=1, le=168, description="The longest an approval may stay valid"
+    )
+    approvers: list[str] = Field(
+        default_factory=list,
+        description="Names allowed to approve. Empty means any name that is not an agent, which "
+        "is only as strong as the identity behind the name (gap G1, task P2.9a)",
+    )
+
+
 class Policy(StrictModel):
     schema_version: Literal[1] = SCHEMA_VERSION
     version: str = Field(min_length=1, description="Policy version, recorded in audit events")
@@ -160,6 +173,7 @@ class Policy(StrictModel):
     never: list[Rule] = Field(default_factory=list)
     budgets: Budgets | None = None
     anomalies: Anomalies | None = None
+    approvals: ApprovalSettings = Field(default_factory=ApprovalSettings)
 
     @model_validator(mode="after")
     def _check(self) -> Policy:

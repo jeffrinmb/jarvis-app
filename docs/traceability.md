@@ -11,13 +11,13 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | # | Requirement | Defined in | Tasks | Status |
 |---|---|---|---|---|
 | 1 | AI across the SDLC inside enforced boundaries (autonomy tiers) | Charter 4 | P2.4, P2.5, P4.1, P4.2, P4.15 | Partly built: the policy gate |
-| 2 | Only major decisions reach a human | Charter 4.1 | P2.4, P2.7, P2.7a, P2.7b, P2.7c, P2.10, P2.10a, P6.10 | Partly built: the gate decides; approvals planned |
-| 3 | Human in the loop: park and resume, attributed approvals, override and stop | Charter 4, 8.11 | P2.7, P2.8, P4.1, P7.7 | Partly built: the kill switch (`agentctl halt`); approvals planned |
+| 2 | Only major decisions reach a human | Charter 4.1 | P2.4, P2.7, P2.7a, P2.7b, P2.7c, P2.7d, P2.7e, P2.10, P2.10a, P6.10 | Partly built: the gate decides and approvals are recorded and checked (ADR 0009); digests and precedents planned |
+| 3 | Human in the loop: park and resume, attributed approvals, override and stop | Charter 4, 8.11 | P2.7, P2.8, P4.1, P7.7 | Partly built: the kill switch and approvals (ADR 0005, 0009); park and resume needs the orchestrator |
 | 4 | Council for high-risk decisions | Charter 4.2 | P7.1, P7.1a | Planned |
 | 5 | Token optimisation and proper token usage | Charter 7.3, 8.1, 8.2 | P2.2, P2.2a, P2.2b, P2.8, P2.8b, P3.5, P4.4a, P4.7a, P6.3 | Partly built: the token and cost ledger, report and Claude Code capture (ADR 0007, 0008); budgets planned |
 | 6 | The right model for each task (routing) | Charter 8.1 | P4.3, P4.7, P4.7b, P7.2, P7.4 | Planned |
 | 7 | Auditability | Charter 8.7 | P2.1, P2.1a, P2.1b, P2.3, P2.12, P3.5a, P4.14 | Partly built: the hash-chained ledger |
-| 8 | Accountability: named humans, no self-approval | Charter 8.11, 9 | P0.1, P2.7, P2.9, P2.9a, P2.9b | Partly built: rules in the schemas |
+| 8 | Accountability: named humans, no self-approval | Charter 8.11, 9 | P0.1, P2.7, P2.9, P2.9a, P2.9b | Partly built: approvals are attributed and no-self-approval and four-eyes are enforced on claimed names (ADR 0009); authenticated identity planned |
 | 9 | Learning from mistakes (a feedback loop, not weight updates) | Charter 5.9 | P3.6, P3.11, P6.5, P7.2 | Planned |
 | 10 | Memory as an LLM-wiki on Markdown, Obsidian optional | Charter 7.1 | P3.1, P3.1a, P3.2, P3.3, P3.3a, P3.4, P3.10 | Planned |
 | 11 | Graph memory and cheap retrieval | Charter 7.2 | P3.7, P3.8, P3.9 | Planned |
@@ -66,7 +66,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 | T-4: the gate is unavailable, or recovery skips the audit | P6.8a | Planned |
 | T-5: secrets or personal data in the repo or the ledger | P1.5, P1.5b, P2.12 | Partly built: secret scan in CI |
 | T-6, T-7: CI and dependency tampering | P1.5, P1.5a, P1.8 | Partly built |
-| ASI09: persuasive explanations win approvals (RT-13) | P2.7c, P6.10 | Planned |
+| ASI09: persuasive explanations win approvals (RT-13) | P2.7, P2.7c, P2.7e, P6.10 | Partly built: requests come from the gate's verdict (ADR 0009); diff text and fatigue metrics planned |
 
 ## Engineering and repository tasks
 

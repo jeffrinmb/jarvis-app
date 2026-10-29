@@ -75,6 +75,21 @@ The hook reads the policy, tool registry, project file and its own adapter confi
 
 Pin a **full commit SHA** with `--policy-ref`: a branch name can be moved by an agent that has a shell, until the sandbox (P4.2) stops it. The options can also come from `JARVIS_POLICY_SOURCE`, `JARVIS_POLICY_REF` and `JARVIS_POLICY_DIR`. They are deliberately not settable in the adapter config, which the agent could edit. `agentctl hook snippet --policy-source git --policy-ref <sha>` writes them into the settings block, and `agentctl hook doctor` shows which source and file hashes are in use.
 
+## Approvals
+
+When the gate answers `human` or `council` for something that may be approved, it writes an **approval request** from its own verdict ([ADR 0009](adr/0009-approval-flow.md)). A person answers it:
+
+```bash
+agentctl approvals list                      # what is waiting
+agentctl approvals show req-0123456789ab     # the rules, paths, size and proposed scope
+agentctl approvals approve req-0123456789ab --by alice [--paths 'src/**'] [--max-diff-lines 100] [--hours 4]
+agentctl approvals reject req-0123456789ab --by alice
+```
+
+An approval names one task, exact tools, path globs, a size limit and an expiry, and the gate re-checks all of it. It never lifts a refusal, the lethal-trifecta, production, escaping-path or tainted-session gates, or a shell command (those stay with Claude Code's prompt, where the command is on screen). A no-go zone needs two different people; high-risk and irreversible tools take only a single-use approval of the exact call. Set `approvals.approvers` in the policy so only named people count. In enforce mode, a call a person allows in Claude Code's own prompt is recorded as an attributed approval, as evidence only. An unattended denial names the request a person can answer.
+
+Names are claims until identity is authenticated (P2.9a): do not switch on enforce mode before that.
+
 ## Stopping everything, and limits
 
 ```bash

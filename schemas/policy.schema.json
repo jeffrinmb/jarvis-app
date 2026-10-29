@@ -89,6 +89,30 @@
       "title": "Anomalies",
       "type": "object"
     },
+    "ApprovalSettings": {
+      "additionalProperties": false,
+      "description": "Limits on approvals, enforced by the gate whenever it counts one (task P2.7).",
+      "properties": {
+        "approvers": {
+          "description": "Names allowed to approve. Empty means any name that is not an agent, which is only as strong as the identity behind the name (gap G1, task P2.9a)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Approvers",
+          "type": "array"
+        },
+        "max_scope_hours": {
+          "default": 24,
+          "description": "The longest an approval may stay valid",
+          "maximum": 168,
+          "minimum": 1,
+          "title": "Max Scope Hours",
+          "type": "integer"
+        }
+      },
+      "title": "ApprovalSettings",
+      "type": "object"
+    },
     "Budgets": {
       "additionalProperties": false,
       "description": "Limits counted from the audit ledger. An exceeded limit sends the call to ``on_exceed``.\n\nEvery field is optional and unset means no limit, so an old policy file behaves as before.\nCalls are decisions that did not end in deny, counted before the current call.",
@@ -320,6 +344,9 @@
         }
       ],
       "default": null
+    },
+    "approvals": {
+      "$ref": "#/$defs/ApprovalSettings"
     },
     "auto_approve": {
       "items": {

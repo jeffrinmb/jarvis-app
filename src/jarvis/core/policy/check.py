@@ -11,8 +11,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from jarvis.core.approvals import profile_for, request_id, restrictive, scan_approvals
 from jarvis.core.killswitch import read_halt
 from jarvis.core.ledger import Ledger, LedgerError
+from jarvis.core.matching import normalize_path
 from jarvis.core.schemas import (
     Action,
     Decision,
@@ -24,6 +26,7 @@ from jarvis.core.schemas import (
     TrustLabel,
     Verdict,
 )
+from jarvis.core.schemas.approval import ApprovalRequest, ProposedScope, RequestRule
 from jarvis.core.schemas.event import ToolRef
 from jarvis.core.schemas.verdict import RuleMatch
 
@@ -100,6 +103,8 @@ def decision_event(
             "trifecta": verdict.trifecta,
             "environment": action.environment.value,
             "paths": action.paths[:MAX_LOGGED_PATHS],
+            "approval_grant_ids": verdict.approval_grant_ids,
+            "approval_request": verdict.approval_request,
             "fingerprint": fingerprint(action.tool_id, action.paths),
             "matches": [
                 {"rule_id": m.rule_id, "category": m.category, "effect": m.effect.value}
@@ -107,6 +112,66 @@ def decision_event(
             ],
             "context": dict(extra or {}),
         },
+    )
+
+
+def _pending_request(action: Action, verdict: Verdict, tool) -> ApprovalRequest | None:
+    """The request a person could answer to let this call through, built from the verdict and
+    the registry and never from anything the agent wrote (P2.7c). ``None`` when nothing can be
+    approved: an allow, a deny, or a human gate that a stored approval must not lift."""
+    if tool is None or verdict.decision not in (Decision.HUMAN, Decision.COUNCIL):
+        return None
+    profile = profile_for(verdict.matches, tool)
+    if not profile.approvable:
+        return None
+    call = fingerprint(action.tool_id, action.paths)
+    paths = [normalize_path(p)[0] for p in action.paths[:MAX_LOGGED_PATHS]]
+    try:
+        scope = ProposedScope(
+            tools=[tool.id],
+            paths=paths,
+            # The held call already counts toward the task's total, so the retry that follows an
+            # approval adds its own size on top. Leave room for exactly that one retry.
+            max_diff_lines=(
+                None
+                if not verdict.diff_size_known
+                else max(verdict.total_diff_lines + (action.diff_lines or 0), 1)
+            ),
+            fingerprint=call if profile.exact_only else None,
+            single_use=profile.exact_only,
+        )
+        return ApprovalRequest(
+            request_id=request_id(action.task_id, call, verdict.matches),
+            task_id=action.task_id,
+            tool_id=action.tool_id,
+            paths=paths,
+            diff_lines=action.diff_lines or 0,
+            total_diff_lines=verdict.total_diff_lines,
+            diff_size_known=verdict.diff_size_known,
+            fingerprint=call,
+            decision=verdict.decision.value,
+            rules=[
+                RequestRule(rule_id=m.rule_id, category=m.category, effect=m.effect.value)
+                for m in restrictive(verdict.matches)
+            ],
+            tainted=verdict.tainted,
+            risk=verdict.risk,
+            four_eyes=profile.four_eyes,
+            proposed_scope=scope,
+        )
+    except ValueError:
+        return None  # a path that cannot be scoped safely is left to the terminal prompt
+
+
+def _request_event(action: Action, request: ApprovalRequest, version: str | None) -> Event:
+    return Event(
+        kind=EventKind.APPROVAL_REQUESTED,
+        agent_id=action.agent_id,
+        on_behalf_of=action.on_behalf_of,
+        task_id=action.task_id,
+        tool=ToolRef(id=action.tool_id, version=version),
+        outcome="pending",
+        data={"request": request.model_dump(mode="json")},
     )
 
 
@@ -178,9 +243,9 @@ def run_check(
         with ledger.transaction() as tx:
             history = list(tx.records())
             prior = prior_diff_lines(history, action.task_id)
-            usage = compute_usage(
-                history, action, policy.budgets, now or datetime.now(UTC), policy.anomalies
-            )
+            moment = now or datetime.now(UTC)
+            usage = compute_usage(history, action, policy.budgets, moment, policy.anomalies)
+            approvals = scan_approvals(history, moment, policy.approvals)
             found = detect_anomalies(policy.anomalies, usage, tool.risk.rank if tool else None)
             verdict = evaluate(
                 action,
@@ -191,11 +256,17 @@ def run_check(
                 usage=usage,
                 halted=halted,
                 anomalies=found,
+                grants=approvals.grants,
             )
+            pending = _pending_request(action, verdict, tool)
+            if pending is not None:
+                verdict = verdict.model_copy(update={"approval_request": pending.request_id})
             if record:
                 tx.append(decision_event(action, verdict, version, extra))
                 for event in _limit_events(action, verdict, version, found):
                     tx.append(event)
+                if pending is not None and pending.request_id not in approvals.requests:
+                    tx.append(_request_event(action, pending, version))
         return verdict
     except (LedgerError, ValueError, OSError) as exc:
         return _fail_closed(policy, action, f"audit ledger unavailable: {exc}")

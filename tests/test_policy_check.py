@@ -42,7 +42,10 @@ def test_every_decision_is_recorded_and_the_chain_still_verifies(ledger):
 def test_denied_and_pending_decisions_are_recorded_too(ledger):
     run_check(action(tool_id="mystery"), policy(), REGISTRY, ledger=ledger)
     run_check(action(paths=["src/x.py"]), policy(), REGISTRY, ledger=ledger)
-    assert [e["decision"] for e in events(ledger)] == ["deny", "human"]
+    decisions = [e for e in events(ledger) if e["kind"] == "policy_decision"]
+    assert [e["decision"] for e in decisions] == ["deny", "human"]
+    # a pending decision also opens an approval request for a person to answer
+    assert [e["kind"] for e in events(ledger)].count("approval_requested") == 1
 
 
 def test_dry_run_reads_history_but_writes_nothing(ledger):
@@ -172,4 +175,7 @@ def test_concurrent_checks_cannot_overshoot_a_cumulative_limit(tmp_path):
 
     assert results.count(Decision.ALLOW) == 2  # 4 + 4 = 8 fits; a third would make 12
     assert results.count(Decision.HUMAN) == 4
-    assert Ledger(path).verify().records == 6
+    # six decisions, plus one approval request: the four pending retries share one card
+    kinds = [r["event"]["kind"] for r in Ledger(path).records()]
+    assert kinds.count("policy_decision") == 6 and kinds.count("approval_requested") == 1
+    assert Ledger(path).verify().records == 7

@@ -1,0 +1,145 @@
+{
+  "$defs": {
+    "ApprovalScope": {
+      "additionalProperties": false,
+      "properties": {
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restricts the approval to one exact call",
+          "title": "Fingerprint"
+        },
+        "max_diff_lines": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cumulative changed lines for the task; unset is valid only for read-only tools",
+          "title": "Max Diff Lines"
+        },
+        "paths": {
+          "description": "Path globs. Empty covers only actions that touch no path",
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "single_use": {
+          "default": false,
+          "title": "Single Use",
+          "type": "boolean"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "tools": {
+          "description": "Exact registry tool ids, never globs",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tools",
+        "task_id",
+        "expires_at"
+      ],
+      "title": "ApprovalScope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "approver": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Approver",
+      "type": "string"
+    },
+    "request_id": {
+      "anyOf": [
+        {
+          "pattern": "^req-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Required on the command line. A prompt approval may have none, for a gate (such as the lethal trifecta) that is answered in the terminal and never carded",
+      "title": "Request Id"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "scope": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApprovalScope"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Set for an approval that can be reused. A prompt approval is a record of one call a person allowed in the terminal and carries no scope"
+    },
+    "tool_use_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Claude Code's id for the call a person allowed",
+      "title": "Tool Use Id"
+    },
+    "via": {
+      "enum": [
+        "cli",
+        "claude-code-prompt"
+      ],
+      "title": "Via",
+      "type": "string"
+    }
+  },
+  "required": [
+    "approver",
+    "via"
+  ],
+  "title": "ApprovalGrant",
+  "type": "object"
+}

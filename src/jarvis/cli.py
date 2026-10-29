@@ -20,6 +20,7 @@ import yaml
 from pydantic import ValidationError
 
 from jarvis.adapters.claude_code import default_state_dir
+from jarvis.approvals_cli import REFUSED_KINDS, add_approvals_parser, run_approvals_command
 from jarvis.core.killswitch import clear_halt, halt_path, read_halt, set_halt
 from jarvis.core.ledger import Ledger, LedgerError
 from jarvis.core.policy import run_check
@@ -164,6 +165,7 @@ def _build_parser() -> argparse.ArgumentParser:
     export.add_argument("--out", default="schemas")
 
     add_hook_parser(sub)
+    add_approvals_parser(sub)
 
     return parser
 
@@ -351,7 +353,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in ("halt", "resume", "status"):
         return _switch_command(args, ledger)
 
+    if args.command == "approvals":
+        return run_approvals_command(args, ledger)
+
     if args.command == "log":
+        if args.kind in REFUSED_KINDS:
+            print(
+                "approvals are recorded with `agentctl approvals approve` or `reject`",
+                file=sys.stderr,
+            )
+            return 2
         try:
             event = _build_event(args)
         except (ValidationError, ValueError) as exc:
