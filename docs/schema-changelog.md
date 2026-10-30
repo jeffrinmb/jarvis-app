@@ -55,6 +55,10 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 
 ### Unreleased
 
+- `approval-grant`: new optional `nonce` and `signature` (an SSH signature, namespace `jarvis-approval`, over the request id, nonce and scope; the approver is not signed because it comes from the allowed-signers file). A signature needs a nonce and a command-line grant (task P2.9a, [ADR 0010](adr/0010-identity-and-signing.md)).
+- `policy`: `approvals` gains `require_signatures` (only signed approvals count, and the signer is the key's name) and `hardware_key_for_four_eyes` (no-go zone approvals need a security key). Both default to off, so existing policies behave as before; enforce mode refuses a policy without `require_signatures`.
+- Adapter config (not a JSON Schema): `allowed_signers_path`, default `.agents/allowed-signers`, read through the policy source.
+
 - New schemas `approval-request` and `approval-grant` (version 1): the `data` of `approval_requested` and `approval_granted` events. A request is built by the gate from its verdict and carries a proposed scope. A grant is one person's approval of a bounded, expiring scope; a prompt approval (`via: claude-code-prompt`) is a record of one call and has no scope. Scope globs that match everything, tool globs and a single-use scope without an exact call are rejected (task P2.7, [ADR 0009](adr/0009-approval-flow.md)).
 - `policy`: new `approvals` block (`max_scope_hours`, default 24, between 1 and 168; `approvers`, a list of names allowed to approve). Both have defaults, so existing policies behave as before except that approvals now exist.
 - `verdict`: new optional `approval_request` (the request a person can answer) and `approval_grant_ids` (the grants that let the call through), and a new rule category `approval`. Consumers must treat an unknown category as not allowed.
