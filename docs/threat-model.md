@@ -66,7 +66,7 @@ Status words: **built** (code and tests exist), **partial**, **planned** (task i
 
 - **Built.** Roles are checked against the registry; actions carry `on_behalf_of`; a done task needs a named human (`tests/test_schemas.py::test_done_task_needs_human`); agents never get the prod environment in project config (`tests/test_schemas.py::test_agents_never_get_prod`).
 - **Planned.** Per-agent identities and short-lived, task-scoped credentials (P2.9).
-- **Gap G1 (high).** `role` and `agent_id` are claimed, not authenticated. Anyone who can run `agentctl check` can claim any role. This must be closed before the gate is switched from log-only to enforcing (P2.10).
+- **Gap G1 (high).** `role` and `agent_id` are claimed, not authenticated. Anyone who can run `agentctl check` can claim any role. This must be closed before the gate is switched from log-only to enforcing (P2.10). The plan is decided in [ADR 0010](adr/0010-identity-and-signing.md): signed approvals verified against an allowed-signers file in the protected source (P2.9a), launcher-bound roles for the hook, signed task credentials for direct callers later (P2.9c). Nothing is built yet.
 
 ### ASI04 Agentic Supply Chain Vulnerabilities
 
@@ -98,7 +98,7 @@ Status words: **built** (code and tests exist), **partial**, **planned** (task i
 
 - **Built.** Strict schemas for actions, events and verdicts; the hash chain detects edits, deletions and reordering (`tests/test_ledger.py::test_modified_event_is_detected`, `tests/test_ledger.py::test_deleted_record_is_detected`).
 - **Planned.** Typed agent-to-agent messages with scoped shared memory (charter 8.8); avoid multi-agent designs until needed.
-- **Gap G4 (medium).** Events are not signed. Someone with write access to the ledger file can append a well-formed, correctly chained event that claims to come from any agent. Recommendation: add event signing to the identity work (P2.9).
+- **Gap G4 (medium).** Events are not signed. Someone with write access to the ledger file can append a well-formed, correctly chained event that claims to come from any agent. Decided in [ADR 0010](adr/0010-identity-and-signing.md): sign approvals and ledger checkpoints, kept outside the ledger (P2.9a, P2.9b); routine events stay unsigned until the sandbox (P4.2). Nothing is built yet.
 
 ### ASI08 Cascading Failures
 

@@ -17,7 +17,7 @@ The project is an early build. Pull requests 1 to 18 are merged to `main`, and n
 - **Policy gate** (`agentctl check`): allow, council, human or deny, with built-in guardrails, taint tracking, the lethal-trifecta rule and cumulative limits that hold under concurrency. It fails closed ([ADR 0002](adr/0002-policy-evaluation-and-fail-closed-rules.md)).
 - **Claude Code hook** (`agentctl hook run`, `snippet`, `doctor`, `report`): builds the gate's action from the real tool call. Log-only by default ([ADR 0003](adr/0003-claude-code-hook-interface.md), [the guide](claude-code-hook.md)). `agentctl halt` and `resume` are a kill switch, and the policy can carry call budgets, a loop breaker and anomaly rules ([ADR 0005](adr/0005-budgets-loop-breaker-and-kill-switch.md), [ADR 0006](adr/0006-anomaly-rules.md), `P2.8`, `P2.8a`). `agentctl approvals list|show|approve|reject` answer approval requests the gate raises ([ADR 0009](adr/0009-approval-flow.md), `P2.7`). `agentctl tokens record` and `report` keep a token and cost ledger ([ADR 0007](adr/0007-token-and-cost-ledger.md), `P2.2`); the Claude Code hook fills it from the session transcript on `Stop`, `SubagentStop` and `SessionEnd` ([ADR 0008](adr/0008-token-capture-from-transcripts.md), `P2.2a`). It can read policy from a git commit or an outside directory, and enforce mode refuses the agent-writable working tree ([ADR 0004](adr/0004-trusted-policy-source.md), `P2.4b`).
 - **CI**: Linux and Windows, Python 3.12 and 3.13, lint, format, about 390 tests, a secret scan over the full history, actions pinned to commit SHAs, and a single required check, `ci-ok`.
-- **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0009.
+- **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0011.
 
 **Not built yet:** approvals and decision cards, identity and signed events, anomaly rules for domains and data volumes, per-stage and token budgets, token and cost budgets, OpenTelemetry export, memory (the wiki), the orchestrator and pipeline, brownfield tooling, evals, the council and the visual layer. See [TODO.md](TODO.md).
 
@@ -37,6 +37,7 @@ The project is an early build. Pull requests 1 to 18 are merged to `main`, and n
 | `P0.6` | Compliance scope, including the EU AI Act dates on EUR-Lex | Retention and oversight requirements |
 | `P0.10a` | Check the employment contract's IP clause | The repository is public under Apache-2.0 |
 | `P0.13` | Final project name and trademark check | Renaming gets harder once the hook is installed in other projects |
+| `P0.16` | Create each approver's SSH signing key (a hardware security key for anyone approving no-go zones) and add the public keys by pull request | `P2.9a` cannot be tested with a real touch requirement without one |
 | `P2.10a` | How strict the taint rule is, and which shell prefixes are allowed | The intervention rate is too high to enforce today |
 | `P2.10` | Switch the hook to enforce mode | Needs `P2.9a`, Claude Code 2.1.295 or later, and a low intervention rate first |
 
@@ -44,9 +45,9 @@ The project is an early build. Pull requests 1 to 18 are merged to `main`, and n
 
 In this order, and why:
 
-1. **`P2.9`, `P2.9a`, `P2.9b`** identity, authenticated roles and signed events (gaps G1 and G4). It needs your decision on how identity and signing work (`P0.15`) first. The approval flow is only as strong as the names behind it, so this comes before enforce mode (`P2.10`).
+1. **`P2.9`, `P2.9a`, `P2.9b`** authenticated approvals and signed checkpoints (gaps G1 and G4), decided in [ADR 0010](adr/0010-identity-and-signing.md). Build `P2.9a` first. It needs you to create the approvers' signing keys (`P0.16`), ideally one hardware security key to test the touch requirement. The approval flow is only as strong as the names behind it, so this comes before enforce mode (`P2.10`).
 2. **`P2.7d`, `P2.7e`** park and resume (needs the orchestrator, `P4.1`), then the real change in a card and approval-fatigue metrics.
-3. **`P2.8b`** token and cost budgets. Build it once you have chosen limits and supplied a real price table. **`P2.3`** (OpenTelemetry) first needs the `P0.3` decision on the observability convention.
+3. **`P2.8b`** token and cost budgets. Build it once you have chosen limits and supplied a real price table. **`P2.3`** (OpenTelemetry export) is unblocked: the convention is decided in [ADR 0011](adr/0011-observability-and-vault.md).
 4. **`P2.6e`** reduce the hook's cost (about one second per call today) whenever convenient; it does not block the others.
 
 ## Known gaps and risks
