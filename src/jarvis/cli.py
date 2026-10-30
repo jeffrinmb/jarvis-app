@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 from jarvis.adapters.claude_code import default_state_dir
 from jarvis.approvals_cli import REFUSED_KINDS, add_approvals_parser, run_approvals_command
+from jarvis.core.approvals import make_verifier
 from jarvis.core.killswitch import clear_halt, halt_path, read_halt, set_halt
 from jarvis.core.ledger import Ledger, LedgerError
 from jarvis.core.policy import run_check
@@ -120,6 +121,11 @@ def _build_parser() -> argparse.ArgumentParser:
     check.add_argument("--ledger", help=f"default: $JARVIS_LEDGER or {DEFAULT_LEDGER}")
     check.add_argument("--state-dir", help="where the kill switch lives (default: user state)")
     check.add_argument(
+        "--allowed-signers",
+        default=".agents/allowed-signers",
+        help="keys that may approve, used when the policy requires signatures",
+    )
+    check.add_argument(
         "--no-log",
         action="store_true",
         help="dry run: read history for cumulative limits but do not record the decision",
@@ -209,6 +215,14 @@ def _build_event(args: argparse.Namespace) -> Event:
             raise ValueError("--data must be a JSON object")
         fields["data"] = data
     return Event(**{k: v for k, v in fields.items() if v is not None})
+
+
+def _verifier(args: argparse.Namespace, policy: Policy):
+    if not policy.approvals.require_signatures:
+        return None
+    path = Path(args.allowed_signers)
+    text = path.read_text(encoding="utf-8") if path.is_file() else None
+    return make_verifier(text, policy.approvals.approvers)
 
 
 def _halt_file(args: argparse.Namespace) -> Path:
@@ -323,6 +337,7 @@ def _check_command(args: argparse.Namespace, ledger: Ledger) -> int:
             ledger=use_ledger,
             record=not args.no_log,
             halt_file=_halt_file(args),
+            verifier=_verifier(args, policy),
         )
     except Exception as exc:  # the gate must fail closed on any unexpected error
         print(f"internal error, denying: {exc!r}", file=sys.stderr)

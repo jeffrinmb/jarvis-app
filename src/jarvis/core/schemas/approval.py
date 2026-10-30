@@ -115,6 +115,15 @@ class ApprovalGrant(StrictModel):
         default=None, max_length=100, description="Claude Code's id for the call a person allowed"
     )
     approver: str = Field(min_length=1, max_length=100)
+    nonce: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{32}$", description="Random, signed with the scope"
+    )
+    signature: str | None = Field(
+        default=None,
+        max_length=8192,
+        description="SSH signature (namespace jarvis-approval) over the request, nonce and scope. "
+        "The approver is whoever the allowed-signers file names for the signing key",
+    )
     via: Literal["cli", "claude-code-prompt"]
     scope: ApprovalScope | None = Field(
         default=None,
@@ -126,6 +135,8 @@ class ApprovalGrant(StrictModel):
     def _scope_matches_channel(self) -> ApprovalGrant:
         if self.via == "cli" and (self.scope is None or self.request_id is None):
             raise ValueError("an approval given on the command line needs a request and a scope")
+        if self.signature is not None and (self.via != "cli" or self.nonce is None):
+            raise ValueError("a signature belongs to a command-line grant and needs its nonce")
         if self.via == "claude-code-prompt" and self.tool_use_id is None:
             raise ValueError("a prompt approval must name the call (tool_use_id)")
         if self.via == "claude-code-prompt" and self.scope is not None:

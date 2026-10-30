@@ -250,9 +250,48 @@ def _doctor(args: argparse.Namespace) -> int:
         print(f"PROBLEM  {exc}")
         findings.append(_problem())
 
+    _doctor_signatures(source, cfg, mode, findings)
+
     for finding in findings:
         print(f"{'ok      ' if finding.ok else 'PROBLEM '} {finding.message}")
     return 0 if all(f.ok for f in findings) else 1
+
+
+def _doctor_signatures(source, cfg, mode, findings) -> None:
+    """Signed approvals (ADR 0010): the policy must ask for them in enforce mode, ``ssh-keygen -Y``
+    must work, and the allowed-signers file should exist."""
+    from jarvis.core import signing
+    from jarvis.core.schemas import Policy, parse_yaml_model
+
+    try:
+        policy_file = source.read(cfg.policy_path)
+        required = bool(
+            policy_file and parse_yaml_model(policy_file.text, Policy).approvals.require_signatures
+        )
+    except (SourceError, ValidationError, ValueError, yaml.YAMLError):
+        return  # the policy problem is already reported above
+    if mode is HookMode.ENFORCE and not required:
+        print("PROBLEM  enforce mode needs `approvals: require_signatures: true` (ADR 0010)")
+        findings.append(_problem())
+    if required or mode is HookMode.ENFORCE:
+        try:
+            print(f"ok       {signing.self_test()}")
+        except signing.SigningError as exc:
+            print(f"PROBLEM  signed approvals cannot work here: {exc}")
+            findings.append(_problem())
+    try:
+        allowed = source.read(cfg.allowed_signers_path)
+    except SourceError:
+        allowed = None
+    if required and allowed is None:
+        print(
+            f"note     {cfg.allowed_signers_path} not found in the policy source: "
+            "no approval can be counted until it lists a key"
+        )
+    elif allowed is not None:
+        print(
+            f"ok       allowed signers: {cfg.allowed_signers_path} (sha256 {allowed.sha256[:12]})"
+        )
 
 
 def _problem():

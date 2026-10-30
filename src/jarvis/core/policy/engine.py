@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jarvis.core.approvals import Grant, covering_grants, profile_for
+from jarvis.core.approvals import Grant, Verifier, covering_grants, is_agent_name, profile_for
 from jarvis.core.schemas import (
     Action,
     DataClass,
@@ -145,7 +145,13 @@ def _anomaly_matches(policy: Policy, anomalies: list[Anomaly] | None) -> list[Ru
     ]
 
 
-def _apply_approvals(verdict: Verdict, facts: _Facts, grants: list[Grant]) -> Verdict:
+def _apply_approvals(
+    verdict: Verdict,
+    facts: _Facts,
+    grants: list[Grant],
+    policy: Policy,
+    verifier: Verifier | None,
+) -> Verdict:
     """Turn a human or council verdict into allow when enough valid approvals cover the call.
 
     Only a verdict whose every restrictive reason may be approved is lifted, and never a deny
@@ -166,9 +172,26 @@ def _apply_approvals(verdict: Verdict, facts: _Facts, grants: list[Grant]) -> Ve
         size_known=facts.size_known,
         profile=profile,
     )
-    approvers = sorted({g.approver for g in covering})
+    # A person is counted by who signed, not by the name in the grant, and an agent never counts.
+    people: dict[str, bool] = {}  # name -> signed with a hardware key
+    counted: list[Grant] = []
+    for grant in covering:
+        name, hardware = grant.approver, False
+        if grant.needs_verification:
+            found = verifier(grant) if verifier is not None else None
+            if found is None:
+                continue
+            name, hardware = found.principal, found.hardware
+        if is_agent_name(name, action.agent_id):
+            continue
+        people[name] = people.get(name, False) or hardware
+        counted.append(grant)
+    if profile.four_eyes and policy.approvals.hardware_key_for_four_eyes:
+        people = {n: hw for n, hw in people.items() if hw}
+    approvers = sorted(people)
     if len(approvers) < (2 if profile.four_eyes else 1):
         return verdict
+    covering = counted
     reason = "approved by " + ", ".join(approvers) + f" (request {covering[0].request_id})"
     approval = RuleMatch(
         rule_id=f"approval:{covering[0].request_id}",
@@ -231,6 +254,7 @@ def evaluate(
     halted: str | None = None,
     anomalies: list[Anomaly] | None = None,
     grants: list[Grant] | None = None,
+    verifier: Verifier | None = None,
 ) -> Verdict:
     """Decide what should happen to ``action``. Pure and deterministic.
 
@@ -392,5 +416,5 @@ def evaluate(
         matches=matches,
     )
     if grants and decision in (Decision.HUMAN, Decision.COUNCIL):
-        verdict = _apply_approvals(verdict, facts, grants)
+        verdict = _apply_approvals(verdict, facts, grants, policy, verifier)
     return verdict

@@ -156,6 +156,15 @@ class ApprovalSettings(StrictModel):
     max_scope_hours: int = Field(
         default=24, ge=1, le=168, description="The longest an approval may stay valid"
     )
+    require_signatures: bool = Field(
+        default=False,
+        description="Only signed approvals count, and the signer is whoever the allowed-signers "
+        "file names for the key, not a name someone typed. Needed before enforce mode",
+    )
+    hardware_key_for_four_eyes: bool = Field(
+        default=False,
+        description="Approvals of no-go zones count only if made with a hardware security key",
+    )
     approvers: list[str] = Field(
         default_factory=list,
         description="Names allowed to approve. Empty means any name that is not an agent, which "

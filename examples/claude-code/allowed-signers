@@ -1,0 +1,9 @@
+# Keys allowed to approve (ADR 0010). Copy to .agents/allowed-signers in the project, keep it in the
+# protected policy source, and add one line per approver, in ssh-keygen's allowed-signers format:
+#
+#   alice namespaces="jarvis-approval" ssh-ed25519 AAAA...your public key...
+#   bob   namespaces="jarvis-approval" sk-ssh-ed25519@openssh.com AAAA...a hardware key...
+#
+# Create a key with `ssh-keygen -t ed25519` (or `-t ed25519-sk` for a hardware security key) and
+# paste the contents of the .pub file after the namespaces option. Nothing is listed here, so no
+# approval counts until you add a key.

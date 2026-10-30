@@ -81,6 +81,20 @@
       "title": "Approver",
       "type": "string"
     },
+    "nonce": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Random, signed with the scope",
+      "title": "Nonce"
+    },
     "request_id": {
       "anyOf": [
         {
@@ -112,6 +126,20 @@
       ],
       "default": null,
       "description": "Set for an approval that can be reused. A prompt approval is a record of one call a person allowed in the terminal and carries no scope"
+    },
+    "signature": {
+      "anyOf": [
+        {
+          "maxLength": 8192,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "SSH signature (namespace jarvis-approval) over the request, nonce and scope. The approver is whoever the allowed-signers file names for the signing key",
+      "title": "Signature"
     },
     "tool_use_id": {
       "anyOf": [
