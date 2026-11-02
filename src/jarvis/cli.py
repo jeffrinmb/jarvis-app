@@ -31,6 +31,7 @@ from jarvis.core.ledger import (
     default_checkpoint_path,
     ledger_id,
 )
+from jarvis.core.observability import export_records, write_export
 from jarvis.core.policy import run_check
 from jarvis.core.schemas import (
     Action,
@@ -197,6 +198,14 @@ def _build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--by", choices=GROUPS, default="model")
     rep.add_argument("--json", action="store_true")
 
+    otel = sub.add_parser("otel", help="OpenTelemetry GenAI traces from the ledger (ADR 0011)")
+    otel_sub = otel.add_subparsers(dest="otel_command", required=True)
+    otel_export = otel_sub.add_parser(
+        "export", help="write the ledger as OTLP/JSON traces; never includes prompt or answer text"
+    )
+    otel_export.add_argument("--ledger")
+    otel_export.add_argument("--out", required=True, help="file to write (replaced if it exists)")
+
     schema = sub.add_parser("schema", help="schema tools")
     schema_sub = schema.add_subparsers(dest="schema_command", required=True)
     export = schema_sub.add_parser("export", help="write JSON Schema files")
@@ -345,6 +354,27 @@ def _tokens_command(args: argparse.Namespace, ledger: Ledger) -> int:
     return 0
 
 
+def _otel_command(args: argparse.Namespace, ledger: Ledger) -> int:
+    if not ledger.path.exists():
+        print(f"ledger not found: {ledger.path}", file=sys.stderr)
+        return 2
+    result = ledger.verify()
+    if not result.ok:
+        print(f"ledger fails verification: {result.error}", file=sys.stderr)
+        return 1
+    exported = export_records(ledger.records())
+    try:
+        path = write_export(exported.document, args.out)
+    except OSError as exc:
+        print(f"cannot write {args.out}: {type(exc).__name__}", file=sys.stderr)
+        return 1
+    print(
+        f"{exported.spans} spans in {exported.sessions} sessions "
+        f"({exported.skipped} events not exported) -> {path}"
+    )
+    return 0
+
+
 def _read_allowed(path: str) -> str | None:
     file = Path(path)
     return file.read_text(encoding="utf-8") if file.is_file() else None
@@ -456,6 +486,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "tokens":
         return _tokens_command(args, ledger)
+
+    if args.command == "otel":
+        return _otel_command(args, ledger)
 
     if args.command in ("halt", "resume", "status"):
         return _switch_command(args, ledger)

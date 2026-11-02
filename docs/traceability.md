@@ -16,7 +16,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | 4 | Council for high-risk decisions | Charter 4.2 | P7.1, P7.1a | Planned |
 | 5 | Token optimisation and proper token usage | Charter 7.3, 8.1, 8.2 | P2.2, P2.2a, P2.2b, P2.8, P2.8b, P3.5, P4.4a, P4.7a, P6.3 | Partly built: the token and cost ledger, report and Claude Code capture (ADR 0007, 0008); budgets planned |
 | 6 | The right model for each task (routing) | Charter 8.1 | P4.3, P4.7, P4.7b, P7.2, P7.4 | Planned |
-| 7 | Auditability | Charter 8.7 | P2.1, P2.1a, P2.1b, P2.3, P2.12, P3.5a, P4.14 | Partly built: the hash-chained ledger |
+| 7 | Auditability | Charter 8.7 | P2.1, P2.1a, P2.1b, P2.3, P2.3a, P2.12, P3.5a, P4.14 | Partly built: the hash-chained ledger |
 | 8 | Accountability: named humans, no self-approval | Charter 8.11, 9 | P0.1, P2.7, P2.9, P2.9a, P2.9b | Partly built: approvals are attributed and no-self-approval and four-eyes are enforced on claimed names (ADR 0009); authenticated identity planned |
 | 9 | Learning from mistakes (a feedback loop, not weight updates) | Charter 5.9 | P3.6, P3.11, P6.5, P7.2 | Planned |
 | 10 | Memory as an LLM-wiki on Markdown, Obsidian optional | Charter 7.1 | P3.1, P3.1a, P3.2, P3.3, P3.3a, P3.4, P3.10 | Planned |
@@ -27,7 +27,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | 15 | Prompt-injection resistance | Charter 8.5 | P2.5, P2.6b, P4.4b, P4.12, P4.12a, P6.4 | Partly built: taint and the trifecta rule |
 | 16 | Software supply chain | Charter 8.6 | P1.5, P1.5a, P1.5b, P4.11, P4.11a, P7.12a | Partly built: pinned actions, lockfile, secret scan |
 | 17 | Agent identity and short-lived credentials | Charter 8.4 | P0.15, P0.16, P2.9, P2.9a, P2.9b, P2.9c, P2.9d, P2.9e | Decided (ADR 0010); signed approvals and checkpoints built (P2.9a, P2.9b); credentials planned |
-| 18 | Observability with OpenTelemetry and one trace id | Charter 8.7 | P2.3 | Planned |
+| 18 | Observability with OpenTelemetry and one trace id | Charter 8.7 | P2.3, P2.3a | Partly built: `agentctl otel export` (ADR 0011); ids are derived until the hook sets them (P2.3a) |
 | 19 | Evals, red team and regression tests for the framework itself | Charter 8.10 | P2.11, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.7, P6.8 | Planned |
 | 20 | Governance and regulatory alignment | Charter 8.11 | P0.6, P2.1b, P7.11 | Planned |
 | 21 | Measure outcomes, not perception | Charter 8.11, 14 | P0.8, P0.9, P6.9 | Planned |
