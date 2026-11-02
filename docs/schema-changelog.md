@@ -42,6 +42,7 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 | `approval-request` | 1 |
 | `decision-card` | 1 |
 | `event` | 1 |
+| `ledger-checkpoint` | 1 |
 | `policy` | 1 |
 | `price-table` | 1 |
 | `project` | 1 |
@@ -54,6 +55,8 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 ## Changelog
 
 ### Unreleased
+
+- New schema `ledger-checkpoint` (version 1): a signed statement that at record `seq` the ledger's hash was `hash`, with the ledger id (the first record's hash), a time and an SSH signature in the namespace `jarvis-checkpoint`. The signer is not stored; it is whoever the allowed-signers file names for the key. One checkpoint per line in an append-only file kept outside the ledger (task P2.9b, [ADR 0010](adr/0010-identity-and-signing.md)).
 
 - `approval-grant`: new optional `nonce` and `signature` (an SSH signature, namespace `jarvis-approval`, over the request id, nonce and scope; the approver is not signed because it comes from the allowed-signers file). A signature needs a nonce and a command-line grant (task P2.9a, [ADR 0010](adr/0010-identity-and-signing.md)).
 - `policy`: `approvals` gains `require_signatures` (only signed approvals count, and the signer is the key's name) and `hardware_key_for_four_eyes` (no-go zone approvals need a security key). Both default to off, so existing policies behave as before; enforce mode refuses a policy without `require_signatures`.
