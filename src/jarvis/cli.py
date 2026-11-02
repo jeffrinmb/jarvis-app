@@ -23,7 +23,14 @@ from jarvis.adapters.claude_code import default_state_dir
 from jarvis.approvals_cli import REFUSED_KINDS, add_approvals_parser, run_approvals_command
 from jarvis.core.approvals import make_verifier
 from jarvis.core.killswitch import clear_halt, halt_path, read_halt, set_halt
-from jarvis.core.ledger import Ledger, LedgerError
+from jarvis.core.ledger import (
+    Ledger,
+    LedgerError,
+    check_checkpoints,
+    create_checkpoint,
+    default_checkpoint_path,
+    ledger_id,
+)
 from jarvis.core.policy import run_check
 from jarvis.core.schemas import (
     Action,
@@ -39,6 +46,7 @@ from jarvis.core.schemas import (
     load_yaml_model,
 )
 from jarvis.core.schemas.event import ModelRef, ToolRef, Usage
+from jarvis.core.signing import SigningError
 from jarvis.core.tokens import (
     GROUPS,
     load_price_table,
@@ -104,6 +112,30 @@ def _build_parser() -> argparse.ArgumentParser:
     verify = sub.add_parser("verify", help="verify the hash chain")
     verify.add_argument("--ledger")
     verify.add_argument("--anchor", type=_parse_anchor, help="SEQ:HASH recorded earlier")
+    verify.add_argument(
+        "--checkpoints",
+        nargs="?",
+        const="auto",
+        help="also check signed checkpoints: a file, or no value for the default for this ledger",
+    )
+    verify.add_argument("--allowed-signers", default=".agents/allowed-signers")
+    verify.add_argument(
+        "--state-dir", help="where default checkpoints are kept (default: user state)"
+    )
+    verify.add_argument(
+        "--max-age-days", type=int, default=7, help="warn if the newest checkpoint is older"
+    )
+
+    checkpoint = sub.add_parser(
+        "checkpoint", help="sign the ledger's head, so truncation or a rewrite is detected"
+    )
+    checkpoint.add_argument("--ledger")
+    checkpoint.add_argument("--key", required=True, help="your SSH signing key")
+    checkpoint.add_argument(
+        "--checkpoints", help="file to append to (default: the per-user state directory)"
+    )
+    checkpoint.add_argument("--allowed-signers", default=".agents/allowed-signers")
+    checkpoint.add_argument("--state-dir")
 
     head = sub.add_parser("head", help="print SEQ:HASH of the last record, for anchoring")
     head.add_argument("--ledger")
@@ -313,6 +345,66 @@ def _tokens_command(args: argparse.Namespace, ledger: Ledger) -> int:
     return 0
 
 
+def _read_allowed(path: str) -> str | None:
+    file = Path(path)
+    return file.read_text(encoding="utf-8") if file.is_file() else None
+
+
+def _checkpoint_command(args: argparse.Namespace, ledger: Ledger) -> int:
+    allowed = _read_allowed(args.allowed_signers)
+    if allowed is None:
+        print(f"allowed-signers file not found: {args.allowed_signers}", file=sys.stderr)
+        return 2
+    state = Path(args.state_dir) if args.state_dir else default_state_dir()
+    print("Signing... touch your security key if it is waiting.", file=sys.stderr)
+    try:
+        made, signer, path = create_checkpoint(
+            ledger,
+            args.key,
+            allowed,
+            Path(args.checkpoints) if args.checkpoints else None,
+            state_dir=state,
+        )
+    except (ValueError, SigningError) as exc:
+        print(f"cannot checkpoint: {exc}", file=sys.stderr)
+        return 2
+    except (LedgerError, OSError) as exc:
+        print(f"ledger error: {type(exc).__name__}", file=sys.stderr)
+        return 1
+    print(f"checkpoint {made.seq}:{made.hash[:12]} signed by {signer} -> {path}")
+    return 0
+
+
+def _verify_checkpoints(args: argparse.Namespace, ledger: Ledger) -> int:
+    """Check signed checkpoints after the chain itself verified. Contradictions fail; an absent
+    or stale checkpoint only warns (ADR 0010)."""
+    allowed = _read_allowed(args.allowed_signers)
+    if allowed is None:
+        print(f"allowed-signers file not found: {args.allowed_signers}", file=sys.stderr)
+        return 2
+    if args.checkpoints == "auto":
+        identity = ledger_id(ledger)
+        state = Path(args.state_dir) if args.state_dir else default_state_dir()
+        path = default_checkpoint_path(state, identity) if identity else None
+    else:
+        path = Path(args.checkpoints)
+    text = path.read_text(encoding="utf-8") if path is not None and path.is_file() else ""
+    report = check_checkpoints(ledger, text, allowed, args.max_age_days)
+    if report.checked:
+        newest = (
+            f"; newest at seq {report.latest_seq} signed by {report.latest_signer}, "
+            f"{report.records_after_latest} records after it"
+            if report.latest_seq is not None
+            else ""
+        )
+        print(f"checkpoints: {report.good} of {report.checked} good{newest}")
+    for warning in report.warnings:
+        print(f"WARNING: {warning}", file=sys.stderr)
+    for failure in report.failures:
+        print(f"FAILED: {failure}", file=sys.stderr)
+    return 0 if report.ok else 1
+
+
 def _load_action(source: str) -> Action:
     text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
     return Action.model_validate(yaml.safe_load(text))  # YAML is a superset of JSON
@@ -398,9 +490,14 @@ def main(argv: list[str] | None = None) -> int:
         result = ledger.verify(anchor=args.anchor)
         if result.ok:
             print(f"OK: {result.records} records, head {result.head_seq}:{result.head_hash}")
+            if args.checkpoints is not None:
+                return _verify_checkpoints(args, ledger)
             return 0
         print(f"FAILED at seq {result.error_seq}: {result.error}", file=sys.stderr)
         return 1
+
+    if args.command == "checkpoint":
+        return _checkpoint_command(args, ledger)
 
     if args.command == "head":
         try:

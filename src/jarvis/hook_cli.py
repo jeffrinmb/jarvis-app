@@ -279,6 +279,8 @@ def _doctor_signatures(source, cfg, mode, findings) -> None:
         except signing.SigningError as exc:
             print(f"PROBLEM  signed approvals cannot work here: {exc}")
             findings.append(_problem())
+    if required and mode is HookMode.ENFORCE:
+        _doctor_checkpoint(cfg)
     try:
         allowed = source.read(cfg.allowed_signers_path)
     except SourceError:
@@ -291,6 +293,25 @@ def _doctor_signatures(source, cfg, mode, findings) -> None:
     elif allowed is not None:
         print(
             f"ok       allowed signers: {cfg.allowed_signers_path} (sha256 {allowed.sha256[:12]})"
+        )
+
+
+def _doctor_checkpoint(cfg) -> None:
+    """A note, never a problem: with no signed checkpoint, truncating the ledger goes unnoticed."""
+    from jarvis.core.ledger import Ledger, default_checkpoint_path, ledger_id
+
+    project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+    ledger = Ledger(project_dir / cfg.ledger_path)
+    try:
+        identity = ledger_id(ledger) if ledger.path.exists() else None
+    except Exception:
+        return
+    if identity is None:
+        return
+    if not default_checkpoint_path(default_state_dir(), identity).is_file():
+        print(
+            "note     no signed ledger checkpoint found in the default place: truncating or "
+            "rewriting the ledger would go unnoticed (agentctl checkpoint --key PATH)"
         )
 
 

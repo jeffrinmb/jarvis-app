@@ -157,7 +157,7 @@ uv run agentctl hook snippet --runner venv --minimal
 
 After some work, see what it would have done: `uv run agentctl hook report`. The first round of findings on this repository is in [docs/dogfood-log.md](docs/dogfood-log.md).
 
-A ledger file cannot reveal that its tail was cut off or that the whole chain was rewritten consistently. Record an anchor (`agentctl head`) elsewhere and pass it to `verify --anchor` to detect both.
+A ledger file cannot reveal that its tail was cut off or that the whole chain was rewritten consistently. Record an anchor (`agentctl head`) elsewhere and pass it to `verify --anchor` to detect both, or sign a checkpoint with your SSH key (`agentctl checkpoint --key PATH`, then `agentctl verify --checkpoints`), which keeps a signed anchor outside the ledger for you.
 
 To work on the project, see [CONTRIBUTING.md](CONTRIBUTING.md). In short:
 

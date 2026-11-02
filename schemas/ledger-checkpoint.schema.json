@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "hash": {
+      "description": "Hash of that record",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hash",
+      "type": "string"
+    },
+    "ledger_id": {
+      "description": "Hash of the ledger's first record",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Ledger Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seq": {
+      "description": "Sequence number of the last record covered",
+      "minimum": 0,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "signature": {
+      "description": "SSH signature, namespace jarvis-checkpoint, over the other fields",
+      "maxLength": 8192,
+      "title": "Signature",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ledger_id",
+    "seq",
+    "hash",
+    "created_at",
+    "signature"
+  ],
+  "title": "Checkpoint",
+  "type": "object"
+}

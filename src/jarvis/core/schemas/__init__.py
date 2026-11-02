@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from .action import Action, SessionState
 from .approval import ApprovalGrant, ApprovalRequest, ApprovalScope, ProposedScope
+from .checkpoint import Checkpoint
 from .common import (
     SCHEMA_VERSION,
     Approval,
@@ -44,6 +45,7 @@ SCHEMAS: dict[str, type[BaseModel]] = {
     "approval-request": ApprovalRequest,
     "decision-card": DecisionCard,
     "event": Event,
+    "ledger-checkpoint": Checkpoint,
     "policy": Policy,
     "price-table": PriceTable,
     "project": ProjectConfig,
@@ -80,6 +82,7 @@ __all__ = [
     "ApprovalRequest",
     "ApprovalScope",
     "Approval",
+    "Checkpoint",
     "DataClass",
     "Decision",
     "DecisionCard",
