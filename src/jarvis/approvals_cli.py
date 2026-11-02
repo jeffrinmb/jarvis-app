@@ -21,11 +21,18 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from jarvis.core.approvals import APPROVAL_AGENT, ApprovalState, is_agent_name, scan_approvals
+from jarvis.core.approvals import (
+    APPROVAL_AGENT,
+    ApprovalState,
+    is_agent_name,
+    scan_approvals,
+    sign_grant,
+)
 from jarvis.core.ledger import Ledger, LedgerError
 from jarvis.core.schemas import Event, EventKind, Policy, load_yaml_model
 from jarvis.core.schemas.approval import ApprovalGrant, ApprovalScope
 from jarvis.core.schemas.policy import ApprovalSettings
+from jarvis.core.signing import SigningError
 
 DEFAULT_POLICY = ".agents/policy.yaml"
 DEFAULT_HOURS = 4
@@ -52,7 +59,17 @@ def add_approvals_parser(sub: argparse._SubParsersAction) -> None:
     approve = asub.add_parser("approve", help="approve a request for a bounded scope")
     common(approve)
     approve.add_argument("request")
-    approve.add_argument("--by", help="who is approving (default: $JARVIS_ON_BEHALF_OF, then OS)")
+    approve.add_argument(
+        "--by",
+        help="who is approving, for an unsigned approval (default: $JARVIS_ON_BEHALF_OF, then OS). "
+        "A signed approval is named by its key and ignores this",
+    )
+    approve.add_argument("--key", help="your SSH signing key; signs the approval (task P2.9a)")
+    approve.add_argument(
+        "--allowed-signers",
+        default=".agents/allowed-signers",
+        help="file naming the keys that may approve (default: .agents/allowed-signers)",
+    )
     approve.add_argument("--paths", nargs="+", help="path globs; default: what was requested")
     approve.add_argument("--max-diff-lines", type=int, help="default: what was requested")
     approve.add_argument(
@@ -163,7 +180,15 @@ def run_approvals_command(args: argparse.Namespace, ledger: Ledger) -> int:
         )
         return 0
 
-    approver = _who(args.by)
+    built = None
+    if command == "approve":
+        built = _build_grant(args, request, settings, now)
+        if isinstance(built, str):
+            print(built, file=sys.stderr)
+            return 2
+        approver = built.approver  # a signed grant is named by its key, not by --by
+    else:
+        approver = _who(args.by)
     agent = state.request_agents.get(args.request, "")
     if agent and is_agent_name(approver, agent):
         print(
@@ -186,10 +211,6 @@ def run_approvals_command(args: argparse.Namespace, ledger: Ledger) -> int:
         )
         message = f"rejected {args.request}; approvals already given for it are revoked"
     else:
-        built = _build_grant(args, request, approver, settings, now)
-        if isinstance(built, str):
-            print(built, file=sys.stderr)
-            return 2
         event = Event(
             kind=EventKind.APPROVAL_GRANTED,
             agent_id=APPROVAL_AGENT,
@@ -208,7 +229,7 @@ def run_approvals_command(args: argparse.Namespace, ledger: Ledger) -> int:
     return 0
 
 
-def _build_grant(args, request, approver: str, settings: ApprovalSettings, now: datetime):
+def _build_grant(args, request, settings: ApprovalSettings, now: datetime):
     """The grant to record, or a message saying why not."""
     proposed = request.proposed_scope
     if request.task_id is None:
@@ -229,8 +250,22 @@ def _build_grant(args, request, approver: str, settings: ApprovalSettings, now: 
             single_use=proposed.single_use,
             expires_at=now + timedelta(hours=hours),
         )
-        return ApprovalGrant(
-            request_id=request.request_id, approver=approver, via="cli", scope=scope
-        )
     except ValidationError as exc:
         return "invalid scope: " + "; ".join(e["msg"] for e in exc.errors())
+    if args.key or settings.require_signatures:
+        if not args.key:
+            return (
+                "this policy requires signed approvals: give --key PATH, your SSH signing key "
+                "(it must be listed in the allowed-signers file)"
+            )
+        allowed = Path(args.allowed_signers)
+        if not allowed.is_file():
+            return f"allowed-signers file not found: {allowed}"
+        print("Signing... touch your security key if it is waiting.", file=sys.stderr)
+        try:
+            return sign_grant(request.request_id, scope, args.key, allowed.read_text("utf-8"))
+        except SigningError as exc:
+            return f"cannot sign: {exc}"
+    return ApprovalGrant(
+        request_id=request.request_id, approver=_who(args.by), via="cli", scope=scope
+    )

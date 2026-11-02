@@ -314,6 +314,7 @@ def test_doctor_fails_for_enforce_on_an_old_version(project, monkeypatch, capsys
     assert "PROBLEM" in capsys.readouterr().out
 
 
+@pytest.mark.skipif(shutil.which("ssh-keygen") is None, reason="enforce mode needs ssh-keygen")
 def test_doctor_passes_when_version_and_files_are_fine(project, monkeypatch, capsys):
     monkeypatch.setattr(hook_cli, "_claude_version_text", lambda: "2.1.300 (Claude Code)")
     assert main(["hook", "doctor", "--mode", "enforce", *protected(project)]) == 0

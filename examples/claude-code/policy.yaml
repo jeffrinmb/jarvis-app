@@ -4,6 +4,14 @@ schema_version: 1
 version: claude-code-0.1.0
 default: human
 
+# Approvals (ADR 0009, ADR 0010). With require_signatures an approval is an SSH signature and the
+# approver is whoever .agents/allowed-signers names for the key, not a name someone typed. Enforce
+# mode needs this. List the people allowed to approve under `approvers` as well.
+approvals:
+  require_signatures: true
+  hardware_key_for_four_eyes: false   # set true once approvers of no-go zones have a security key
+  max_scope_hours: 24
+
 # Limits counted from the ledger. A tripped limit sends the call to a human (on_exceed: deny stops
 # it outright). Tune these from `agentctl hook report` before enforcing: re-running the same test
 # command on the same paths looks like a loop, so keep the threshold generous.

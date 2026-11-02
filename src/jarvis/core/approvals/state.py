@@ -14,6 +14,7 @@ name outside the list does not count even if the command line would have refused
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -27,6 +28,7 @@ from jarvis.core.schemas.approval import ApprovalGrant, ApprovalRequest, Approva
 from jarvis.core.schemas.policy import ApprovalSettings
 
 from .rules import Profile, is_agent_name
+from .signing_payload import grant_payload
 
 APPROVAL_AGENT = "agentctl:approve"
 
@@ -38,6 +40,9 @@ class Grant:
     approver: str
     scope: ApprovalScope
     granted_at: datetime
+    signature: str | None = None
+    needs_verification: bool = False  # the gate must verify the signature before counting it
+    payload: bytes = b""  # the signed bytes
 
 
 @dataclass
@@ -47,6 +52,7 @@ class ApprovalState:
     grants: list[Grant] = field(default_factory=list)  # still valid
     rejected: set[str] = field(default_factory=set)  # request ids with a rejection on record
     used: set[str] = field(default_factory=set)  # single-use grant ids already consumed
+    revoked: set[str] = field(default_factory=set)  # digests of signed grants that were rejected
 
 
 def _moment(value: Any) -> datetime | None:
@@ -70,15 +76,32 @@ def _valid_grant(event: dict[str, Any], settings: ApprovalSettings, now: datetim
     scope = grant.scope
     if grant.via != "cli" or scope is None or granted_at is None:
         return None
-    if settings.approvers and grant.approver not in settings.approvers:
-        return None
+    signed = settings.require_signatures
+    if signed and (grant.signature is None or grant.nonce is None):
+        return None  # an unsigned grant does not count when signatures are required
+    if not signed and settings.approvers and grant.approver not in settings.approvers:
+        return None  # (a signed grant is checked against the list by name of its key)
     expires = scope.expires_at.astimezone(UTC)
     if expires <= now or expires > granted_at + timedelta(hours=settings.max_scope_hours):
         return None
     event_id = event.get("event_id")
     if not isinstance(event_id, str):
         return None
-    return Grant(event_id, grant.request_id, grant.approver, scope, granted_at)
+    payload = grant_payload(grant) if signed else b""
+    return Grant(
+        event_id,
+        grant.request_id,
+        grant.approver,
+        scope,
+        granted_at,
+        signature=grant.signature,
+        needs_verification=signed,
+        payload=payload,
+    )
+
+
+def digest(signature: str | None) -> str | None:
+    return hashlib.sha256(signature.encode()).hexdigest() if signature else None
 
 
 def scan_approvals(
@@ -101,12 +124,16 @@ def scan_approvals(
             state.request_agents[request.request_id] = str(event.get("agent_id") or "")
         elif kind == EventKind.APPROVAL_GRANTED.value:
             grant = _valid_grant(event, settings, now)
-            if grant is not None:
+            # A copy of a rejected, signed grant appended later must not bring it back.
+            if grant is not None and digest(grant.signature) not in state.revoked:
                 grants.append(grant)
         elif kind == EventKind.APPROVAL_DENIED.value and event.get("agent_id") == APPROVAL_AGENT:
             request_id = data.get("request_id")
             if isinstance(request_id, str):
                 state.rejected.add(request_id)
+                state.revoked.update(
+                    d for g in grants if g.request_id == request_id if (d := digest(g.signature))
+                )
                 grants = [g for g in grants if g.request_id != request_id]  # revokes earlier ones
         elif kind == EventKind.POLICY_DECISION.value and event.get("decision") == (
             Decision.ALLOW.value

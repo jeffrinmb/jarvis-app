@@ -44,6 +44,10 @@ class HookConfig(StrictModel):
     registry_path: str = ".agents/tool-registry.yaml"
     project_path: str | None = None
     ledger_path: str = ".agents/ledger/events.jsonl"
+    allowed_signers_path: str = Field(
+        default=".agents/allowed-signers",
+        description="Keys that may approve, read through the policy source (ADR 0010)",
+    )
     prices_path: str | None = Field(
         default=None,
         description="Price table (examples/prices.yaml) used to cost model calls captured from "

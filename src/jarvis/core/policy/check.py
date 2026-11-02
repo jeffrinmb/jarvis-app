@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from jarvis.core.approvals import profile_for, request_id, restrictive, scan_approvals
+from jarvis.core.approvals import Verifier, profile_for, request_id, restrictive, scan_approvals
 from jarvis.core.killswitch import read_halt
 from jarvis.core.ledger import Ledger, LedgerError
 from jarvis.core.matching import normalize_path
@@ -225,12 +225,14 @@ def run_check(
     extra: dict[str, Any] | None = None,
     halt_file: Path | None = None,
     now: datetime | None = None,
+    verifier: Verifier | None = None,
 ) -> Verdict:
     """Evaluate ``action`` and, when a ledger is given and ``record`` is true, log the verdict.
 
     With a ledger, history is read and the decision is appended under one lock, so concurrent
     checks for the same task see each other's decisions. ``extra`` is stored with the event.
     ``halt_file`` is the kill switch (task P2.8); ``now`` exists so tests can fix the day.
+    ``verifier`` says who really signed a grant (task P2.9a); without one, signed grants fail.
     """
     halt = read_halt(halt_file) if halt_file is not None else None
     halted = halt.describe() if halt is not None else None
@@ -257,6 +259,7 @@ def run_check(
                 halted=halted,
                 anomalies=found,
                 grants=approvals.grants,
+                verifier=verifier,
             )
             pending = _pending_request(action, verdict, tool)
             if pending is not None:

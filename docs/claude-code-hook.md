@@ -82,13 +82,13 @@ When the gate answers `human` or `council` for something that may be approved, i
 ```bash
 agentctl approvals list                      # what is waiting
 agentctl approvals show req-0123456789ab     # the rules, paths, size and proposed scope
-agentctl approvals approve req-0123456789ab --by alice [--paths 'src/**'] [--max-diff-lines 100] [--hours 4]
+agentctl approvals approve req-0123456789ab --key ~/.ssh/id_ed25519 [--paths 'src/**'] [--max-diff-lines 100] [--hours 4]
 agentctl approvals reject req-0123456789ab --by alice
 ```
 
 An approval names one task, exact tools, path globs, a size limit and an expiry, and the gate re-checks all of it. It never lifts a refusal, the lethal-trifecta, production, escaping-path or tainted-session gates, or a shell command (those stay with Claude Code's prompt, where the command is on screen). A no-go zone needs two different people; high-risk and irreversible tools take only a single-use approval of the exact call. Set `approvals.approvers` in the policy so only named people count. In enforce mode, a call a person allows in Claude Code's own prompt is recorded as an attributed approval, as evidence only. An unattended denial names the request a person can answer.
 
-Names are claims until identity is authenticated (P2.9a): do not switch on enforce mode before that.
+**Signed approvals** ([ADR 0010](adr/0010-identity-and-signing.md)). With `approvals: require_signatures: true` in the policy, `approve` signs with your SSH key (`--key`) and the gate counts the approval only if the signature verifies against `.agents/allowed-signers`, read from the protected policy source (see `examples/claude-code/allowed-signers` for the format). The approver is whoever that file names for your key, not a name you typed. `hardware_key_for_four_eyes: true` additionally demands a security key for no-go zones. Enforce mode refuses a policy that does not require signatures, and `agentctl hook doctor` runs a real sign-and-verify. **A software key that an agent running as you can use can sign as you**; use a hardware key for anything that matters, and note that the touch requirement has not been tested with a real key yet (P2.9d).
 
 ## Stopping everything, and limits
 

@@ -30,6 +30,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jarvis.core.approvals import make_verifier
 from jarvis.core.killswitch import halt_path
 from jarvis.core.ledger import Ledger
 from jarvis.core.policy import run_check
@@ -178,6 +179,11 @@ def _load_policy_files(ctx: HookContext):
     policy_file = _read_required(source, cfg.policy_path)
     registry_file = _read_required(source, cfg.registry_path)
     policy = parse_yaml_model(policy_file.text, Policy)
+    if ctx.enforcing and not policy.approvals.require_signatures:
+        raise SourceError(
+            "enforce mode needs `approvals: require_signatures: true` in the policy, so an "
+            "approval is a signature and not a name someone typed (ADR 0010)"
+        )
     registry = parse_tool_registry(registry_file.text)
     project = None
     provenance = {
@@ -191,6 +197,18 @@ def _load_policy_files(ctx: HookContext):
         project = parse_yaml_model(project_file.text, ProjectConfig)
         provenance["project_sha256"] = project_file.sha256
     return policy, registry, project, provenance
+
+
+def _verifier(ctx: HookContext, policy: Policy):
+    """Says who signed an approval, from the allowed-signers file in the policy source. Only
+    needed when the policy requires signatures; a missing file means nothing verifies."""
+    if not policy.approvals.require_signatures:
+        return None
+    try:
+        found = ctx.policy_source.read(ctx.cfg.allowed_signers_path)
+    except SourceError:
+        found = None
+    return make_verifier(found.text if found else None, policy.approvals.approvers)
 
 
 def _pre_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
@@ -217,6 +235,7 @@ def _pre_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
             record=True,
             extra=extra,
             halt_file=halt_path(ctx.state_dir),
+            verifier=_verifier(ctx, policy),
         )
     finally:
         # Applied when the call is requested, not when it finishes: if PostToolUse never
