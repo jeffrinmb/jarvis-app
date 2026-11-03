@@ -31,7 +31,13 @@ from jarvis.core.ledger import (
     default_checkpoint_path,
     ledger_id,
 )
-from jarvis.core.observability import export_records, write_export
+from jarvis.core.observability import (
+    OtlpSendError,
+    export_records,
+    normalize_endpoint,
+    send_export,
+    write_export,
+)
 from jarvis.core.policy import run_check
 from jarvis.core.schemas import (
     Action,
@@ -204,7 +210,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "export", help="write the ledger as OTLP/JSON traces; never includes prompt or answer text"
     )
     otel_export.add_argument("--ledger")
-    otel_export.add_argument("--out", required=True, help="file to write (replaced if it exists)")
+    otel_export.add_argument("--out", help="file to write (replaced if it exists)")
+    otel_export.add_argument(
+        "--endpoint",
+        help="also send to an OTLP/HTTP collector, such as http://localhost:4318 "
+        "(https required except for localhost; no credentials are sent)",
+    )
 
     schema = sub.add_parser("schema", help="schema tools")
     schema_sub = schema.add_subparsers(dest="schema_command", required=True)
@@ -355,6 +366,15 @@ def _tokens_command(args: argparse.Namespace, ledger: Ledger) -> int:
 
 
 def _otel_command(args: argparse.Namespace, ledger: Ledger) -> int:
+    if not args.out and not args.endpoint:
+        print("give --out FILE, --endpoint URL, or both", file=sys.stderr)
+        return 2
+    if args.endpoint:
+        try:
+            normalize_endpoint(args.endpoint)
+        except ValueError as exc:
+            print(f"invalid endpoint: {exc}", file=sys.stderr)
+            return 2
     if not ledger.path.exists():
         print(f"ledger not found: {ledger.path}", file=sys.stderr)
         return 2
@@ -363,15 +383,27 @@ def _otel_command(args: argparse.Namespace, ledger: Ledger) -> int:
         print(f"ledger fails verification: {result.error}", file=sys.stderr)
         return 1
     exported = export_records(ledger.records())
-    try:
-        path = write_export(exported.document, args.out)
-    except OSError as exc:
-        print(f"cannot write {args.out}: {type(exc).__name__}", file=sys.stderr)
-        return 1
-    print(
+    summary = (
         f"{exported.spans} spans in {exported.sessions} sessions "
-        f"({exported.skipped} events not exported) -> {path}"
+        f"({exported.skipped} events not exported)"
     )
+    if args.out:
+        try:
+            path = write_export(exported.document, args.out)
+        except OSError as exc:
+            print(f"cannot write {args.out}: {type(exc).__name__}", file=sys.stderr)
+            return 1
+        print(f"{summary} -> {path}")
+    if args.endpoint:
+        try:
+            sent = send_export(exported.document, args.endpoint)
+        except OtlpSendError as exc:
+            print(f"not sent: {exc}", file=sys.stderr)
+            return 1
+        rejected = f", {sent.rejected_spans} rejected" if sent.rejected_spans else ""
+        print(f"{summary} sent to {sent.url}: HTTP {sent.status}{rejected}")
+        if sent.rejected_spans:
+            return 1
     return 0
 
 
