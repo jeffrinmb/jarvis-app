@@ -1,5 +1,6 @@
 """Observability export (task P2.3, ADR 0011)."""
 
+from .ids import agent_span_id_for, span_id_for, trace_id_for
 from .otel import (
     EXPORTED_KINDS,
     SEMCONV_COMMIT,
@@ -15,5 +16,8 @@ __all__ = [
     "SEMCONV_REPO",
     "ExportResult",
     "export_records",
+    "agent_span_id_for",
+    "span_id_for",
+    "trace_id_for",
     "write_export",
 ]
