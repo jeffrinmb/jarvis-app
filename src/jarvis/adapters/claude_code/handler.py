@@ -49,7 +49,7 @@ from jarvis.core.schemas.event import ToolRef
 
 from .capture import capture_usage
 from .config import HookConfig, HookMode
-from .mapping import agent_identity, build_action, on_behalf_of, safe_session_id
+from .mapping import agent_identity, build_action, on_behalf_of, safe_session_id, trace_ids
 from .payload import HookInput
 from .session import SessionStore
 from .source import SourceError, SourceFile, TrustedSource, WorktreeSource
@@ -225,6 +225,7 @@ def _pre_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
         "shell_class": plan.shell_class,
         "state_healthy": loaded.healthy,
     }
+    trace_id, span_id = trace_ids(inp)
     try:
         verdict = run_check(
             plan.action,
@@ -236,6 +237,8 @@ def _pre_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
             extra=extra,
             halt_file=halt_path(ctx.state_dir),
             verifier=_verifier(ctx, policy),
+            trace_id=trace_id,
+            span_id=span_id,
         )
     finally:
         # Applied when the call is requested, not when it finishes: if PostToolUse never
@@ -282,8 +285,11 @@ def _post_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
     plan = build_action(inp, ctx.cfg, str(ctx.project_dir), SessionState())
     _store(ctx).update(inp.session_id, plan.exposure)
     failed = inp.hook_event_name == "PostToolUseFailure"
+    trace_id, span_id = trace_ids(inp)
     _ledger(ctx).append(
         Event(
+            trace_id=trace_id,
+            span_id=span_id,
             kind=EventKind.TOOL_CALL,
             agent_id=plan.action.agent_id,
             on_behalf_of=plan.action.on_behalf_of,
@@ -302,6 +308,7 @@ def _post_tool_use(inp: HookInput, ctx: HookContext) -> HookResult:
 def _note(inp: HookInput, ctx: HookContext, data: dict[str, Any]) -> Event:
     agent_id, behalf = agent_identity(inp, ctx.cfg)
     return Event(
+        trace_id=trace_ids(inp)[0],
         kind=EventKind.NOTE,
         agent_id=agent_id,
         on_behalf_of=behalf,

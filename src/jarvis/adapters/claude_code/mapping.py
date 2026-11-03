@@ -18,6 +18,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
+from jarvis.core.observability import span_id_for, trace_id_for
 from jarvis.core.policy import matches_any, normalize_path
 from jarvis.core.schemas import Action, DataClass, Environment, TrustLabel
 from jarvis.core.schemas.action import SessionState
@@ -94,6 +95,17 @@ def safe_session_id(session_id: str) -> str:
     if re.fullmatch(r"[A-Za-z0-9_-]{1,100}", session_id):
         return session_id
     return "h-" + hashlib.sha256(session_id.encode("utf-8", "replace")).hexdigest()[:32]
+
+
+def trace_ids(inp: HookInput) -> tuple[str, str | None]:
+    """The trace id of this session and the span id of this tool call (task P2.3a).
+
+    The decision before a call and its outcome after it get the same span id because both come
+    from the session id and ``tool_use_id``. There is no span id without a ``tool_use_id``.
+    """
+    session = safe_session_id(inp.session_id)
+    span = span_id_for(session, "tool", inp.tool_use_id) if inp.tool_use_id else None
+    return trace_id_for(session), span
 
 
 def registry_tool_id(claude_tool: str, cfg: HookConfig) -> str:

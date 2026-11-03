@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from yaml import YAMLError
 
 from jarvis.core.ledger import Ledger
+from jarvis.core.observability import span_id_for, trace_id_for
 from jarvis.core.schemas import EventKind
 from jarvis.core.schemas.loader import parse_yaml_model
 from jarvis.core.schemas.price_table import PriceTable
@@ -91,6 +92,8 @@ def _event(
         prices=prices,
         task_id=f"claude-{session}",
         outcome="ok",
+        trace_id=trace_id_for(session),
+        span_id=span_id_for(session, "model", message.message_id),
         ts=ts,
         extra_data=extra,
     )

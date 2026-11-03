@@ -79,11 +79,15 @@ def decision_event(
     verdict: Verdict,
     version: str | None,
     extra: dict[str, Any] | None = None,
+    trace_id: str | None = None,
+    span_id: str | None = None,
 ) -> Event:
     """Build the audit event for a decision. ``extra`` is caller context (for example the
     harness, session and permission mode) stored under ``data["context"]``; it must already
-    be free of secrets and file contents."""
+    be free of secrets and file contents. ``trace_id`` and ``span_id`` join it to a trace."""
     return Event(
+        trace_id=trace_id,
+        span_id=span_id,
         kind=EventKind.POLICY_DECISION,
         agent_id=action.agent_id,
         on_behalf_of=action.on_behalf_of,
@@ -163,8 +167,11 @@ def _pending_request(action: Action, verdict: Verdict, tool) -> ApprovalRequest 
         return None  # a path that cannot be scoped safely is left to the terminal prompt
 
 
-def _request_event(action: Action, request: ApprovalRequest, version: str | None) -> Event:
+def _request_event(
+    action: Action, request: ApprovalRequest, version: str | None, trace_id: str | None = None
+) -> Event:
     return Event(
+        trace_id=trace_id,
         kind=EventKind.APPROVAL_REQUESTED,
         agent_id=action.agent_id,
         on_behalf_of=action.on_behalf_of,
@@ -183,12 +190,17 @@ LIMIT_EVENTS = {
 
 
 def _limit_events(
-    action: Action, verdict: Verdict, version: str | None, anomalies: list[Anomaly]
+    action: Action,
+    verdict: Verdict,
+    version: str | None,
+    anomalies: list[Anomaly],
+    trace_id: str | None = None,
 ) -> list[Event]:
     """A budget, loop or anomaly trip is also its own event, so it can be searched and alerted
     on. Anomalies are recorded whatever ``on_anomaly`` says, including ``alert``."""
     events = [
         Event(
+            trace_id=trace_id,
             kind=LIMIT_EVENTS[m.rule_id],
             agent_id=action.agent_id,
             on_behalf_of=action.on_behalf_of,
@@ -202,6 +214,7 @@ def _limit_events(
     ]
     events += [
         Event(
+            trace_id=trace_id,
             kind=EventKind.ANOMALY_DETECTED,
             agent_id=action.agent_id,
             on_behalf_of=action.on_behalf_of,
@@ -226,6 +239,8 @@ def run_check(
     halt_file: Path | None = None,
     now: datetime | None = None,
     verifier: Verifier | None = None,
+    trace_id: str | None = None,
+    span_id: str | None = None,
 ) -> Verdict:
     """Evaluate ``action`` and, when a ledger is given and ``record`` is true, log the verdict.
 
@@ -233,6 +248,8 @@ def run_check(
     checks for the same task see each other's decisions. ``extra`` is stored with the event.
     ``halt_file`` is the kill switch (task P2.8); ``now`` exists so tests can fix the day.
     ``verifier`` says who really signed a grant (task P2.9a); without one, signed grants fail.
+    ``trace_id`` goes on every event written; ``span_id`` only on the decision itself, so the
+    tool's later outcome can share it (task P2.3a).
     """
     halt = read_halt(halt_file) if halt_file is not None else None
     halted = halt.describe() if halt is not None else None
@@ -265,11 +282,11 @@ def run_check(
             if pending is not None:
                 verdict = verdict.model_copy(update={"approval_request": pending.request_id})
             if record:
-                tx.append(decision_event(action, verdict, version, extra))
-                for event in _limit_events(action, verdict, version, found):
+                tx.append(decision_event(action, verdict, version, extra, trace_id, span_id))
+                for event in _limit_events(action, verdict, version, found, trace_id):
                     tx.append(event)
                 if pending is not None and pending.request_id not in approvals.requests:
-                    tx.append(_request_event(action, pending, version))
+                    tx.append(_request_event(action, pending, version, trace_id))
         return verdict
     except (LedgerError, ValueError, OSError) as exc:
         return _fail_closed(policy, action, f"audit ledger unavailable: {exc}")

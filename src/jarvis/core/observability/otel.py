@@ -10,16 +10,18 @@ is an adapter that reads it and never writes to it.
 tool names, token counts, cost, decisions, rule ids, ids and timestamps. No prompt or answer
 text, no command text, no file paths or contents, and no free-text reason or error message.
 
-Ids: an event's own ``trace_id`` and ``span_id`` are used when it has them. Today the hook sets
-neither, so the rest are derived from values already in the ledger (the session id, falling
-back to the task id, for the trace; the event id for the span) and marked with
-``jarvis.ids_derived``. Every event of a session therefore shares one trace, under one
-``invoke_agent`` span that this module synthesises for the session.
+Ids: an event's own ``trace_id`` and ``span_id`` are used when it has them. The Claude Code hook
+sets both (task P2.3a): one trace per session, and for a tool call one span id shared by the
+gate's decision and the call's outcome, which are then folded into one ``execute_tool`` span.
+Events without ids (older rows, ``agentctl log``) get them derived from values already in the
+ledger (the session id, falling back to the task id, for the trace; the event id for the span)
+and are marked ``jarvis.ids_derived``. The derivation matches the hook's, so a session that
+straddles the change stays in one trace. Every trace sits under one ``invoke_agent`` span that
+this module synthesises for the session.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
@@ -28,6 +30,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from .ids import agent_span_id_for, span_id_for, trace_id_for
 
 SEMCONV_REPO = "open-telemetry/semantic-conventions-genai"
 SEMCONV_COMMIT = "16f3130892e2e02fa3f0eef72c0e6b554ff08e5c"
@@ -44,10 +48,6 @@ STATUS_ERROR = 2
 
 EXPORTED_KINDS = ("model_call", "tool_call", "tool_denied", "policy_decision")
 FAILED_OUTCOMES = {"failed", "error", "deny"}
-
-
-def _hex(text: str, length: int) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:length]
 
 
 def _attr(key: str, value: Any) -> dict[str, Any]:
@@ -80,13 +80,18 @@ def _session_of(event: dict[str, Any]) -> str | None:
     return str(value) if value else None
 
 
-def _grouping_key(event: dict[str, Any]) -> str:
-    return _session_of(event) or event.get("task_id") or f"agent:{event.get('agent_id')}"
+def _trace_of(event: dict[str, Any]) -> str:
+    """The event's own trace id, or the one the hook would have given its session. They agree
+    for an ordinary session id, so rows written before the hook set ids join the same trace."""
+    own = event.get("trace_id")
+    if own:
+        return own
+    key = _session_of(event) or event.get("task_id") or f"agent:{event.get('agent_id')}"
+    return trace_id_for(key)
 
 
 @dataclass
 class _Session:
-    key: str
     trace_id: str
     span_id: str
     conversation_id: str | None
@@ -94,6 +99,7 @@ class _Session:
     start: datetime
     end: datetime
     spans: list[dict[str, Any]] = field(default_factory=list)
+    by_id: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -118,9 +124,10 @@ def _span_for(
     data = event.get("data") or {}
     outcome = event.get("outcome")
     common = {
-        "jarvis.ledger.seq": seq,
-        "jarvis.event_id": event["event_id"],
-        "jarvis.event_kind": kind,
+        # Lists, because one span can join several events: a gate decision and its outcome.
+        "jarvis.ledger.seq": [seq],
+        "jarvis.event_id": [event["event_id"]],
+        "jarvis.event_kind": [kind],
         "jarvis.task_id": event.get("task_id"),
         "jarvis.stage": event.get("stage"),
         "jarvis.outcome": outcome,
@@ -173,26 +180,59 @@ def _span_for(
             "jarvis.rule_ids": [m["rule_id"] for m in matches if isinstance(m, dict)],
             "jarvis.fingerprint": data.get("fingerprint"),
         }
-        span_name, span_kind = f"jarvis.policy_decision {tool}", KIND_INTERNAL
+        if event.get("span_id"):
+            # The decision gates a real call that has its own span, shared with the call's
+            # outcome (P2.3a): it is that call's span, so it is named for the call.
+            attrs["gen_ai.operation.name"] = "execute_tool"
+            attrs["gen_ai.tool.type"] = "function"
+            span_name, span_kind = f"execute_tool {tool}", KIND_INTERNAL
+        else:
+            span_name, span_kind = f"jarvis.policy_decision {tool}", KIND_INTERNAL
     else:
         return None
 
-    own_trace = event.get("trace_id")
     own_span = event.get("span_id")
-    derived = not (own_trace and own_span)
+    derived = not (event.get("trace_id") and own_span)
     span = {
-        "traceId": own_trace or session.trace_id,
-        "spanId": own_span or _hex(event["event_id"], 16),
+        "traceId": session.trace_id,
+        "spanId": own_span or span_id_for("event", event["event_id"]),
         "parentSpanId": session.span_id,
         "name": span_name,
         "kind": span_kind,
-        "startTimeUnixNano": _nanos(start),
-        "endTimeUnixNano": _nanos(end),
-        "attributes": _attributes({**attrs, **common, "jarvis.ids_derived": derived or None}),
+        "startTimeUnixNano": start,
+        "endTimeUnixNano": end,
+        "attributes": {**attrs, **common, "jarvis.ids_derived": derived or None},
     }
     if outcome in FAILED_OUTCOMES or event.get("decision") == "deny" or kind == "tool_denied":
         span["status"] = {"code": STATUS_ERROR}
     return span, start
+
+
+_JOINED = ("jarvis.ledger.seq", "jarvis.event_id", "jarvis.event_kind")
+
+
+def _merge(into: dict[str, Any], other: dict[str, Any]) -> None:
+    """Fold a later event of the same span into the first. Where both set an attribute the later
+    one wins (the outcome over the decision), the identifying lists are joined, the span covers
+    both times, and an error on either makes the span an error."""
+    a, b = into["attributes"], other["attributes"]
+    joined = {key: a.get(key, []) + b.get(key, []) for key in _JOINED}
+    a.update({k: v for k, v in b.items() if v is not None})
+    a.update(joined)
+    into["startTimeUnixNano"] = min(into["startTimeUnixNano"], other["startTimeUnixNano"])
+    into["endTimeUnixNano"] = max(into["endTimeUnixNano"], other["endTimeUnixNano"])
+    if "status" in other:
+        into["status"] = other["status"]
+
+
+def _finish(span: dict[str, Any]) -> dict[str, Any]:
+    """Encode the times and attributes once all events of the span are folded in."""
+    return {
+        **span,
+        "startTimeUnixNano": _nanos(span["startTimeUnixNano"]),
+        "endTimeUnixNano": _nanos(span["endTimeUnixNano"]),
+        "attributes": _attributes(span["attributes"]),
+    }
 
 
 def _agent_span(session: _Session) -> dict[str, Any]:
@@ -208,7 +248,6 @@ def _agent_span(session: _Session) -> dict[str, Any]:
                 "gen_ai.operation.name": "invoke_agent",
                 "gen_ai.agent.name": session.agent,
                 "gen_ai.conversation.id": session.conversation_id,
-                "jarvis.ids_derived": True,
                 "jarvis.span_synthesised": True,
             }
         ),
@@ -226,15 +265,13 @@ def export_records(records: Iterable[dict[str, Any]]) -> ExportResult:
             skipped += 1
             continue
         when = datetime.fromisoformat(event["ts"])
-        key = _grouping_key(event)
-        session = sessions.get(key)
+        trace = _trace_of(event)
+        session = sessions.get(trace)
         if session is None:
-            conversation = _session_of(event)
-            session = sessions[key] = _Session(
-                key=key,
-                trace_id=event.get("trace_id") or _hex(f"jarvis-trace:{key}", 32),
-                span_id=_hex(f"jarvis-agent:{key}", 16),
-                conversation_id=conversation,
+            session = sessions[trace] = _Session(
+                trace_id=trace,
+                span_id=agent_span_id_for(trace),
+                conversation_id=_session_of(event),
                 agent=str(event.get("agent_id")),
                 start=when,
                 end=when,
@@ -244,7 +281,12 @@ def export_records(records: Iterable[dict[str, Any]]) -> ExportResult:
             skipped += 1
             continue
         span, start = built
-        session.spans.append(span)
+        earlier = session.by_id.get(span["spanId"])
+        if earlier is not None:
+            _merge(earlier, span)
+        else:
+            session.by_id[span["spanId"]] = span
+            session.spans.append(span)
         session.start = min(session.start, start)
         session.end = max(session.end, when)
 
@@ -252,7 +294,7 @@ def export_records(records: Iterable[dict[str, Any]]) -> ExportResult:
     for session in sessions.values():
         if session.spans:
             spans.append(_agent_span(session))
-            spans.extend(session.spans)
+            spans.extend(_finish(s) for s in session.spans)
     document = {
         "resourceSpans": [
             {
