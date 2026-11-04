@@ -134,3 +134,7 @@ The warm handler itself takes 21 ms for `PreToolUse` and 9 ms for `PostToolUse` 
 **What went wrong on the way:** my first client imported `hashlib` and `pathlib` and cost about 270 ms per call; profiling showed 37 ms in `jarvis.hook_paths` alone. The benchmark's own `--stop` omitted `--mode`, so it did not match its server's spec and left servers running; I stopped them by hand. On Windows each server appears as two processes (the venv launcher and its child).
 
 **Not measured or tested:** Linux and macOS; a long session; Claude Code's `http` hooks (P2.6g).
+
+**Live use, the same afternoon.** The maintainer's hook was switched to `--server`. Two defects appeared that the unit tests had not caught: a terminal window opened (the venv launcher's console child, see ADR 0012), and a server that was killed hard was never replaced because the client trusted stale discovery files. Both are fixed and were re-verified under the real hook: no window, survival across calls, and a replacement server started at once after a hard kill. One thing is not explained: an attempt to start the server with `CREATE_NO_WINDOW` alone was dead within about 30 seconds; I kept the flags that survived instead of chasing it.
+
+Method lesson: my own cleanup commands (killing servers to reset state) left stale files and made a working change look broken, twice. Reset state with the product's own `hook serve --stop`, or expect stale files.
