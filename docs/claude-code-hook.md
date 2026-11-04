@@ -75,6 +75,18 @@ The hook reads the policy, tool registry, project file and its own adapter confi
 
 Pin a **full commit SHA** with `--policy-ref`: a branch name can be moved by an agent that has a shell, until the sandbox (P4.2) stops it. The options can also come from `JARVIS_POLICY_SOURCE`, `JARVIS_POLICY_REF` and `JARVIS_POLICY_DIR`. They are deliberately not settable in the adapter config, which the agent could edit. `agentctl hook snippet --policy-source git --policy-ref <sha>` writes them into the settings block, and `agentctl hook doctor` shows which source and file hashes are in use.
 
+## Running the hook through a local server
+
+```bash
+agentctl hook snippet --server --runner venv     # registers the hook with --server
+agentctl hook serve --status                     # exit 0 if the server for this project is running
+agentctl hook serve --stop                       # stop it (it also exits after 30 idle minutes)
+```
+
+With `--server` the registered command asks a small local server for the decision instead of loading everything itself, which cut the per-call time from about 480 to 570 ms to about 230 to 280 ms on the machine it was measured on ([ADR 0012](adr/0012-hook-server.md)). The first call starts the server in the background (one per project and settings, and it restarts when the code changes). The decisions and ledger records are the same, because the server runs the same code.
+
+It is safe to leave on: if the server cannot be reached the command decides for itself, as before, just slower; if a request was sent and no answer came back it never decides a second time (enforce mode blocks that call, log-only lets it through with a note). The server listens on `127.0.0.1` only, needs a secret kept in the per-user state directory, checks the `Host` header and accepts only JSON. **An agent running as you can read that secret and talk to the server or kill it**, the same limit as the kill switch until the sandbox (P4.2). It is not yet tested on Linux or macOS, and Claude Code's own `http` hooks, which would remove the process start entirely, are a follow-up (P2.6g).
+
 ## Approvals
 
 When the gate answers `human` or `council` for something that may be approved, it writes an **approval request** from its own verdict ([ADR 0009](adr/0009-approval-flow.md)). A person answers it:
@@ -131,7 +143,7 @@ Every decision records: the tool and its registry id, the project-relative paths
 - Session state lives in a user-level directory outside the project, but it is an ordinary file. An agent with shell access could in principle edit it. The gate treats the framework's own files as human-gated paths in the example policy, and the sandbox will close this properly.
 - In `enforce` mode, **blocking `ConfigChange`** also stops you changing your own Claude Code settings during a session. Turn it off with `block_config_changes: false` if that gets in the way.
 - Parallel tool calls in one turn may run their hooks at the same time, so exposure from one call may not yet be visible to another in the same batch.
-- **Cost per call.** Each hook run starts a Python process and takes about **1.2 seconds** on the Windows machine it was measured on, almost all of it importing: the Python start (0.19 s), pydantic (about 0.6 s) and YAML (see [the dogfood log](dogfood-log.md), round 3). Registering more events multiplies it. Use `--minimal` (three events instead of seven, so about half the calls) and `--runner venv`. Task P2.6e removed what could be removed by importing less, which was only a few percent; the rest needs a long-lived process (P2.6f). `tests/test_hook_imports.py` stops new work from adding to it by accident.
+- **Cost per call.** Each hook run starts a Python process, and almost all of its time is importing (the Python start, pydantic, YAML). On the Windows machine it was measured on that was about **0.5 to 1.2 seconds**, depending on how busy the machine was (see [the dogfood log](dogfood-log.md), rounds 3 and 4). Registering more events multiplies it. Use `--minimal` (three events instead of seven, so about half the calls) and `--runner venv`, and see the next section for the local server, which roughly halves it again. `tests/test_hook_imports.py` stops new work from adding to the in-process cost by accident.
 - Unattended `claude -p` runs trust the folder, so a repository's own `.claude/settings.json` hooks run without a prompt. Review `.claude/` before running unattended on a repository you did not write.
 
 ## Configuration

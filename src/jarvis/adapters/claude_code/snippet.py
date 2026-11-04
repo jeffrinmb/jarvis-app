@@ -44,6 +44,7 @@ def build_settings(
     policy_source: str | None = None,
     policy_ref: str | None = None,
     policy_dir: str | None = None,
+    server: bool = False,
 ) -> dict[str, Any]:
     """Settings JSON with one hook command registered for each event the adapter handles.
 
@@ -66,6 +67,8 @@ def build_settings(
             "agent-writable (ADR 0004)"
         )
     source_args: list[str] = []
+    if server:
+        source_args.append("--server")
     if policy_source:
         source_args += ["--policy-source", policy_source]
     if policy_ref:

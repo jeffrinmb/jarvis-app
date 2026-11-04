@@ -114,3 +114,23 @@ Run to run the spread is about 60 ms, so only the `Stop` and `SessionStart` chan
 **Conclusion:** importing less is exhausted at a few percent. A per-call Python process cannot get under about one second here. Reaching the 200 ms target means not starting Python per call (P2.6f). Until then `--minimal` halves the number of calls.
 
 Method note: the first `git stash` used to swap code for the "before" run hit a conflict on the renamed file when restoring. The working tree was verified by diff and tests afterwards and nothing was lost, but a `git worktree` is a safer way to compare.
+
+## Round 4: 2026-11-04, a local hook server (P2.6f)
+
+**A correction to round 3.** The absolute times in round 3 (about 1.25 s per call, bare Python 0.19 s) were taken while this machine was slow. Measured again the same afternoon with the same method, bare Python took 107 ms and a hook call about 0.47 to 0.50 s. The machine's speed varied by a factor of two or three between hours, so the *ratios* are meaningful and the absolute figures are not. Round 3's conclusion that "a per-call process cannot get under about one second" was true of that hour only. Its before/after comparison was run back to back and still stands (a few percent).
+
+**Measured with the server (back to back, same session; medians of 11 runs):**
+
+| Event | Without `--server` | With `--server` |
+|---|---|---|
+| bare Python (for scale) | 112 ms | 152 ms |
+| `PreToolUse` | 479 ms | 227 ms |
+| `PostToolUse` | 500 ms | 233 ms |
+| `SessionStart` | 556 ms | 228 ms |
+| `Stop` (200 messages) | 550 ms | 256 ms |
+
+The warm handler itself takes 21 ms for `PreToolUse` and 9 ms for `PostToolUse` in-process, and about 51 ms over loopback HTTP with a naive client. The client's own cost over a bare interpreter fell from about 370 ms to about 75 ms (its imports were trimmed from about 80 ms to about 40 ms by dropping `hashlib`, `pathlib` and `typing` from its path).
+
+**What went wrong on the way:** my first client imported `hashlib` and `pathlib` and cost about 270 ms per call; profiling showed 37 ms in `jarvis.hook_paths` alone. The benchmark's own `--stop` omitted `--mode`, so it did not match its server's spec and left servers running; I stopped them by hand. On Windows each server appears as two processes (the venv launcher and its child).
+
+**Not measured or tested:** Linux and macOS; a long session; Claude Code's `http` hooks (P2.6g).

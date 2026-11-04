@@ -9,11 +9,18 @@ either way (task P2.6e).
 
 from __future__ import annotations
 
+import os
 import sys
 
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if args[:2] == ["hook", "run"] and (
+        "--server" in args or os.environ.get("JARVIS_HOOK_SERVER") == "1"
+    ):
+        from jarvis.hook_client import main_client
+
+        return main_client(args)
     if args[:1] == ["hook"]:
         from jarvis.hook_cli import main_hook
 
