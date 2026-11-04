@@ -19,6 +19,7 @@ from jarvis.adapters.claude_code import (
     HookConfig,
     HookContext,
     HookMode,
+    HookResult,
     build_settings,
     check_environment,
     default_state_dir,
@@ -35,6 +36,7 @@ from jarvis.adapters.claude_code.source import (
     make_source,
 )
 from jarvis.core.ledger import Ledger
+from jarvis.hook_paths import build_spec
 
 
 def add_hook_parser(sub: argparse._SubParsersAction) -> None:
@@ -51,6 +53,23 @@ def add_hook_parser(sub: argparse._SubParsersAction) -> None:
     run.add_argument("--config", help=f"adapter config (default: <project>/{DEFAULT_CONFIG})")
     run.add_argument("--state-dir", help="per-session state directory (default: user state dir)")
     add_source_arguments(run)
+    run.add_argument(
+        "--server",
+        action="store_true",
+        help="ask a local hook server for the decision (started on first use), and decide here "
+        "if it cannot be reached. Same decisions, much less start-up time (ADR 0012)",
+    )
+
+    serve = hook_sub.add_parser(
+        "serve", help="run, stop or inspect the local hook server for this project"
+    )
+    serve.add_argument("--mode", choices=[m.value for m in HookMode])
+    serve.add_argument("--config")
+    serve.add_argument("--state-dir")
+    serve.add_argument("--idle-minutes", type=float, default=30.0, help="exit after this long idle")
+    serve.add_argument("--stop", action="store_true", help="stop the running server")
+    serve.add_argument("--status", action="store_true", help="exit 0 if it is running")
+    add_source_arguments(serve)
 
     snippet = hook_sub.add_parser("snippet", help="print the hooks block for a settings file")
     snippet.add_argument("--mode", choices=[m.value for m in HookMode], default="log-only")
@@ -65,6 +84,12 @@ def add_hook_parser(sub: argparse._SubParsersAction) -> None:
         "--minimal",
         action="store_true",
         help="register only PreToolUse, SessionStart and ConfigChange (about half the cost)",
+    )
+    snippet.add_argument(
+        "--server",
+        action="store_true",
+        help="register the command with --server: ask a local hook server (much less start-up "
+        "time per call; see ADR 0012)",
     )
     add_source_arguments(snippet)
 
@@ -135,6 +160,7 @@ def run_hook_command(args: argparse.Namespace) -> int:
                 policy_source=args.policy_source,
                 policy_ref=args.policy_ref,
                 policy_dir=args.policy_dir,
+                server=args.server,
             )
         except ValueError as exc:
             print(f"cannot build settings: {exc}", file=sys.stderr)
@@ -143,6 +169,8 @@ def run_hook_command(args: argparse.Namespace) -> int:
         return 0
     if args.hook_command == "report":
         return _report(args)
+    if args.hook_command == "serve":
+        return _serve(args)
     return _doctor(args)
 
 
@@ -175,12 +203,41 @@ def _read_stdin() -> str:
     return stream.read()
 
 
-def _failure(enforce: bool, message: str) -> int:
+def _failure_result(enforce: bool, message: str) -> HookResult:
     if enforce:
-        print(f"jarvis policy gate blocked this call: {message}", file=sys.stderr)
-        return 2
-    print(f"jarvis hook (log-only): {message}", file=sys.stderr)
-    return 0
+        return HookResult(2, None, f"jarvis policy gate blocked this call: {message}")
+    return HookResult(0, None, f"jarvis hook (log-only): {message}")
+
+
+def _emit(result: HookResult) -> int:
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
+    return result.exit_code
+
+
+def execute(payload: object, spec: dict) -> HookResult:
+    """Judge one hook call. Used by the in-process hook and by the hook server, so a decision is
+    the same wherever it is made. ``spec`` comes from ``jarvis.hook_paths.build_spec``."""
+    mode_hint = spec.get("mode")
+    enforce_hint = mode_hint == HookMode.ENFORCE.value
+    project_dir = Path(spec["project_dir"])
+    options = argparse.Namespace(
+        policy_source=spec.get("policy_source"),
+        policy_ref=spec.get("policy_ref"),
+        policy_dir=spec.get("policy_dir"),
+    )
+    try:
+        source = source_from_args(options, project_dir)
+        cfg = load_config_from(source, project_dir, spec.get("config"))
+    except SourceError as exc:
+        return _failure_result(enforce_hint, f"policy source: {exc}")
+    except (ValidationError, OSError, ValueError, yaml.YAMLError) as exc:
+        return _failure_result(enforce_hint, f"cannot load adapter config: {type(exc).__name__}")
+
+    mode = HookMode(mode_hint) if mode_hint in {m.value for m in HookMode} else cfg.mode
+    return handle(payload, HookContext(cfg, mode, project_dir, Path(spec["state_dir"]), source))
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -190,28 +247,46 @@ def _run(args: argparse.Namespace) -> int:
     try:
         payload = json.loads(_read_stdin())
     except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
-        return _failure(enforce_hint, f"hook input is not valid JSON ({type(exc).__name__})")
+        return _emit(
+            _failure_result(enforce_hint, f"hook input is not valid JSON ({type(exc).__name__})")
+        )
 
     cwd = payload.get("cwd") if isinstance(payload, dict) else None
-    project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd or os.getcwd())
+    spec = build_spec(
+        mode=args.mode,
+        config=args.config,
+        state_dir=args.state_dir,
+        policy_source=getattr(args, "policy_source", None),
+        policy_ref=getattr(args, "policy_ref", None),
+        policy_dir=getattr(args, "policy_dir", None),
+        payload_cwd=cwd if isinstance(cwd, str) else None,
+    )
+    return _emit(execute(payload, spec))
 
-    try:
-        source = source_from_args(args, project_dir)
-        cfg = load_config_from(source, project_dir, args.config)
-    except SourceError as exc:
-        return _failure(enforce_hint, f"policy source: {exc}")
-    except (ValidationError, OSError, ValueError, yaml.YAMLError) as exc:
-        return _failure(enforce_hint, f"cannot load adapter config: {type(exc).__name__}")
 
-    mode = HookMode(mode_hint) if mode_hint in {m.value for m in HookMode} else cfg.mode
-    state_dir = Path(args.state_dir) if args.state_dir else default_state_dir()
-    result = handle(payload, HookContext(cfg, mode, project_dir, state_dir, source))
+def _serve(args: argparse.Namespace) -> int:
+    """``agentctl hook serve``: run, stop or inspect the server for this project and settings."""
+    from jarvis import hook_client
 
-    if result.stdout:
-        print(result.stdout)
-    if result.stderr:
-        print(result.stderr, file=sys.stderr)
-    return result.exit_code
+    spec = build_spec(
+        mode=args.mode,
+        config=args.config,
+        state_dir=args.state_dir,
+        policy_source=getattr(args, "policy_source", None),
+        policy_ref=getattr(args, "policy_ref", None),
+        policy_dir=getattr(args, "policy_dir", None),
+        payload_cwd=None,
+    )
+    if args.stop:
+        print("stopped" if hook_client.stop(spec) else "no server was running for these settings")
+        return 0
+    if args.status:
+        running = hook_client.ping(spec)
+        print("running" if running else "not running")
+        return 0 if running else 1
+    from jarvis.hook_server import serve
+
+    return serve(spec, args.idle_minutes)
 
 
 def _claude_version_text() -> str | None:

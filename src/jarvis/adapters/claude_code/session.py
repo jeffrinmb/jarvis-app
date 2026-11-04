@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from jarvis.core.filelock import file_lock
 from jarvis.core.schemas import DataClass, TrustLabel
 from jarvis.core.schemas.action import SessionState
+from jarvis.hook_paths import default_state_dir as _default_state_dir
 
 from .mapping import Exposure, safe_session_id
 
@@ -36,15 +36,9 @@ class LoadedState:
     healthy: bool
 
 
+# Kept here for existing imports; the implementation is stdlib-only so the hook client can use it.
 def default_state_dir() -> Path:
-    override = os.environ.get("JARVIS_STATE_DIR")
-    if override:
-        return Path(override)
-    if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-        return Path(base) / "jarvis" / "sessions"
-    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(base) / "jarvis" / "sessions"
+    return Path(_default_state_dir())
 
 
 class SessionStore:
