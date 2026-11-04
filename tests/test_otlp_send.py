@@ -153,6 +153,24 @@ def test_a_redirect_is_refused_and_not_followed(collector, code):
     assert collector.hits == [("POST", "/v1/traces")]  # nothing was requested at /elsewhere
 
 
+@pytest.mark.parametrize("variable", ["HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"])
+def test_an_environment_proxy_is_never_used(collector, monkeypatch, variable):
+    """The "plain http only to localhost" rule is about where the bytes go. A proxy named in the
+    environment would receive them instead, in the clear, and the command would still report
+    success from the proxy's answer."""
+    proxy = Collector()
+    try:
+        for name in ("HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv(variable, proxy.url)
+        sent = send_export(DOC, collector.url)
+        assert sent.status == 200
+        assert len(collector.requests) == 1  # it went to the collector itself
+        assert proxy.hits == []  # and nothing was handed to the proxy
+    finally:
+        proxy.close()
+
+
 def test_an_unreachable_collector_is_an_error_not_a_hang(collector):
     url = collector.url
     collector.close()

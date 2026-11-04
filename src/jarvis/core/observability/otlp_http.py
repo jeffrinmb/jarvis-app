@@ -8,6 +8,8 @@ so it only happens when a person gives an endpoint, and the rules below fail clo
   ``[::1]``), so nothing travels in the clear to another host;
 * no credentials are read or sent, so an endpoint that needs a token is not supported yet;
 * redirects are refused, so a collector cannot bounce the body somewhere else;
+* proxies named in the environment (``HTTP_PROXY`` and the like) are ignored, so the body goes to
+  the endpoint given and nowhere else;
 * the response body is never printed or stored, only the status and the count of spans the
   collector reports as rejected.
 
@@ -77,7 +79,10 @@ def send_export(
     request = urllib.request.Request(
         url, data=body, method="POST", headers={"Content-Type": "application/json"}
     )
-    opener = urllib.request.build_opener(_NoRedirect)
+    # An empty ProxyHandler: urllib otherwise reads HTTP_PROXY from the environment, which would
+    # hand the body to that proxy in the clear (even for "localhost") and report the proxy's
+    # answer as the collector's. The rules above are about where the bytes go.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
     try:
         with opener.open(request, timeout=timeout) as response:
             status = response.status
