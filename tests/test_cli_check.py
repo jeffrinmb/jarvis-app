@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-import jarvis.cli
+import jarvis.commands
 from jarvis.cli import main
 from jarvis.core.ledger import Ledger
 
@@ -141,7 +141,7 @@ def test_an_unexpected_error_denies(files, monkeypatch, capsys):
     def boom(*args, **kwargs):
         raise RuntimeError("bug")
 
-    monkeypatch.setattr(jarvis.cli, "run_check", boom)
+    monkeypatch.setattr(jarvis.commands, "run_check", boom)
     assert check(files) == 12
     assert "internal error" in capsys.readouterr().err
 

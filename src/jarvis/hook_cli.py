@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -116,6 +115,14 @@ def load_config_from(source: TrustedSource, project_dir: Path, config: str | Non
     return load_config(Path(config) if config else project_dir / DEFAULT_CONFIG)
 
 
+def main_hook(argv: list[str]) -> int:
+    """``agentctl hook ...`` without building the parser for every other command."""
+    parser = argparse.ArgumentParser(prog="agentctl", description="Jarvis framework tools")
+    sub = parser.add_subparsers(dest="command", required=True)
+    add_hook_parser(sub)
+    return run_hook_command(parser.parse_args(argv))
+
+
 def run_hook_command(args: argparse.Namespace) -> int:
     if args.hook_command == "run":
         return _run(args)
@@ -208,6 +215,8 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _claude_version_text() -> str | None:
+    import subprocess
+
     try:
         done = subprocess.run(
             ["claude", "--version"], capture_output=True, text=True, timeout=15, check=False

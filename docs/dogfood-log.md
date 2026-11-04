@@ -90,3 +90,27 @@ Registered `Stop`, `SubagentStop` and `SessionEnd` in the git-ignored `.claude/s
 - **Whole-file re-read:** not measured yet. The session transcript was about 17 MB at the time; the per-turn cost has not been timed.
 
 Lesson: the unit tests had asserted the wrong behaviour for subagents, because I had written them from an assumption. Only a live run (and then the primary documentation) showed it.
+
+## Round 3: 2026-11-04, hook latency (P2.6e)
+
+Measured with the way Claude Code runs the hook (`.venv/Scripts/python.exe -m jarvis.cli hook run --mode log-only`), against a throwaway project, on the same Windows machine as round 1. Medians of 15 runs, before and after, back to back.
+
+| Event | Before | After | Change |
+|---|---|---|---|
+| `python -c pass` (for scale) | 176 ms | 189 ms | noise |
+| `PreToolUse` | 1272 ms | 1258 ms | -14 ms |
+| `PostToolUse` | 1258 ms | 1248 ms | -10 ms |
+| `SessionStart` | 1247 ms | 1198 ms | -49 ms |
+| `Stop` (200 transcript messages) | 1301 ms | 1201 ms | -100 ms |
+
+Run to run the spread is about 60 ms, so only the `Stop` and `SessionStart` changes are clearly real.
+
+**Where the time goes** (fresh interpreter, medians): bare Python 192 ms; YAML adds about 60 ms; importing pydantic adds about 230 ms and **the first model class adds about 390 ms more**, because pydantic loads its core lazily on first use; all of our other 45 or so models together add about 80 ms; the rest is our own modules and the standard library pydantic pulls in (`importlib.metadata`, `zipfile`, `bz2`, `zoneinfo`). So about 1.1 s of a 1.2 s call is the Python start plus pydantic plus YAML.
+
+**What was done:** the entry point was split so `hook` does not import the other commands, and the OTLP sender (`urllib`, `http`, `socket`, `ssl`, `email`), `subprocess`, `tempfile` and `secrets` load only when used. Before this the hook paid about 130 ms for the sender alone on every call.
+
+**What did not help:** deferring pydantic's model construction (`defer_build`) gave no measurable gain, because the hook uses most of the models it imports. It was tried and reverted.
+
+**Conclusion:** importing less is exhausted at a few percent. A per-call Python process cannot get under about one second here. Reaching the 200 ms target means not starting Python per call (P2.6f). Until then `--minimal` halves the number of calls.
+
+Method note: the first `git stash` used to swap code for the "before" run hit a conflict on the renamed file when restoring. The working tree was verified by diff and tests afterwards and nothing was lost, but a `git worktree` is a safer way to compare.

@@ -8,7 +8,7 @@ file, from whichever listed key made the signature.
 from __future__ import annotations
 
 import json
-import secrets
+import os
 from datetime import UTC
 
 from jarvis.core.schemas.approval import ApprovalGrant, ApprovalScope
@@ -32,4 +32,4 @@ def grant_payload(grant: ApprovalGrant) -> bytes:
 
 
 def new_nonce() -> str:
-    return secrets.token_hex(16)
+    return os.urandom(16).hex()  # the same source `secrets` uses

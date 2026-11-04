@@ -48,7 +48,7 @@ In this order, and why:
 1. **`P0.16` then `P2.9d`**: create the approvers' signing keys (ideally one hardware security key) so the touch requirement can be tested for real. Signed approvals are built (`P2.9a`, [ADR 0010](adr/0010-identity-and-signing.md)) but the hardware path has never run against a real key. Then **`P2.9c`** signed task credentials with the orchestrator, and **`P2.9e`** signing checkpoints on a schedule. After those, enforce mode (`P2.10`) is a decision rather than a risk.
 2. **`P2.7d`, `P2.7e`** park and resume (needs the orchestrator, `P4.1`), then the real change in a card and approval-fatigue metrics.
 3. **`P2.8b`** token and cost budgets. Build it once you have chosen limits and supplied a real price table. **`P2.3`** and **`P2.3a`** (OpenTelemetry export, with real trace ids from the hook) and **`P2.3b`** (sending with `--endpoint`) are built ([ADR 0011](adr/0011-observability-and-vault.md)); what remains is **`P2.3c`**: run it against a real collector or viewer, which has not been done, plus authentication and a cursor.
-4. **`P2.6e`** reduce the hook's cost (about one second per call today) whenever convenient; it does not block the others.
+4. **`P2.6f`** make the hook cheap enough for every call (about 1.2 s each today). Importing less (`P2.6e`) gained only a few percent, because pydantic and the Python start dominate; the next step is a long-lived process, and that needs a design round first (an `http` hook to a local service, or a tiny client to a warm worker).
 
 ## Known gaps and risks
 
