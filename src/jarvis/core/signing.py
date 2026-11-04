@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import subprocess
 
 NS_APPROVAL = "jarvis-approval"
 NS_CHECKPOINT = "jarvis-checkpoint"
@@ -60,6 +62,8 @@ def ssh_keygen() -> str:
 
 
 def _run(args: list[str], data: bytes | None, timeout: int) -> subprocess.CompletedProcess[bytes]:
+    import subprocess  # not at module level: it is slow to import and only needed here
+
     try:
         return subprocess.run(args, input=data, capture_output=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired as exc:
@@ -102,6 +106,8 @@ def verify(data: bytes, signature: str, allowed_signers: str, namespace: str) ->
         return None
     if "BEGIN SSH SIGNATURE" not in signature or not allowed_signers.strip():
         return None
+    import tempfile
+
     try:
         with tempfile.TemporaryDirectory(prefix="jarvis-sig-") as tmp:
             allowed = Path(tmp) / "allowed"
@@ -142,6 +148,8 @@ def verify(data: bytes, signature: str, allowed_signers: str, namespace: str) ->
 def self_test() -> str:
     """A real sign-and-verify round trip with a throwaway key, for ``hook doctor``. Returns a
     short description or raises ``SigningError``."""
+    import tempfile
+
     tool = ssh_keygen()
     with tempfile.TemporaryDirectory(prefix="jarvis-selftest-") as tmp:
         key = Path(tmp) / "k"

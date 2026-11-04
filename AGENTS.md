@@ -32,7 +32,7 @@ After changing a schema in `src/jarvis/core/schemas/`, run `uv run agentctl sche
 ## Layout
 
 - `src/jarvis/core/`: `schemas`, `ledger`, `policy` (the gate), `filelock`; the other packages (orchestrator, memory, gates, tools, security, evals, council) are stubs for later phases.
-- `src/jarvis/adapters/claude_code/`: the Claude Code hook. `src/jarvis/cli.py` and `src/jarvis/hook_cli.py`: the `agentctl` command.
+- `src/jarvis/adapters/claude_code/`: the Claude Code hook. `src/jarvis/cli.py` (a thin entry point), `src/jarvis/commands.py` (the full command set) and `src/jarvis/hook_cli.py`: the `agentctl` command.
 - `examples/`, `schemas/` (generated, do not edit by hand), `tests/`, `docs/`.
 - `.agents/`: this repository's own agent policy, tool registry and adapter config.
 

@@ -20,10 +20,12 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    import subprocess
 
 DEFAULT_REF = "origin/main"
 SOURCE_KINDS = ("worktree", "directory", "git")
@@ -138,6 +140,8 @@ class GitSource:
         self._commit: str | None = None
 
     def _git(self, *args: str) -> subprocess.CompletedProcess[bytes]:
+        import subprocess  # only the git source needs it, and it is slow to import
+
         # Variables such as GIT_DIR could point git at some other repository.
         env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         try:
