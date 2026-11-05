@@ -16,6 +16,7 @@ from jarvis.core.ledger import (
     create_checkpoint,
     default_checkpoint_path,
     ledger_id,
+    read_checkpoint_files,
 )
 from jarvis.core.ledger.checkpoint import canonical_payload
 from jarvis.core.schemas import Event, EventKind
@@ -445,3 +446,28 @@ def test_the_json_report_carries_the_checkpoint_status(reported, keys, allowed, 
     assert main(["hook", "report", "--json"]) == 0
     status = json.loads(capsys.readouterr().out)["checkpoints"]
     assert status["state"] == "checked" and status["good"] == 1 and status["failures"] == []
+
+
+def test_the_same_checkpoint_in_two_files_counts_once(ledger, keys, allowed, tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    state = tmp_path / "state"
+    kept = project / "milestone.jsonl"
+    create_checkpoint(ledger, keys["alice"], allowed, state_dir=state, milestone_file=kept)
+    user_file = default_checkpoint_path(state, ledger_id(ledger))
+    assert user_file.read_text(encoding="utf-8") == kept.read_text(encoding="utf-8")
+    text = read_checkpoint_files(user_file, kept, tmp_path / "missing.jsonl")
+    assert text.count("\n") == 1
+    assert check_checkpoints(ledger, text, allowed).good == 1
+
+
+def test_a_tilde_in_the_key_path_is_expanded_by_the_program(keys, tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / ".ssh").mkdir(parents=True)
+    shutil.copy(keys["alice"], home / ".ssh" / "approver")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # what Windows uses
+    signature = signing.sign(b"data", "~/.ssh/approver", NS_CHECKPOINT)
+    assert "BEGIN SSH SIGNATURE" in signature
+    with pytest.raises(signing.SigningError, match="not found"):
+        signing.sign(b"data", "~/.ssh/nothing", NS_CHECKPOINT)

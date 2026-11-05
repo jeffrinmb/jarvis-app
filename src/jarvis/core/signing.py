@@ -78,9 +78,11 @@ def sign(
     """The armoured SSH signature of ``data``. The key may be a security-key handle, in which
     case ssh-keygen waits for a touch (and asks for a passphrase on the terminal if it has one).
     """
-    if not Path(key_path).is_file():
+    # PowerShell and cmd pass "~" through unexpanded, so expand it here, in every shell alike.
+    key = Path(key_path).expanduser()
+    if not key.is_file():
         raise SigningError(f"signing key not found: {key_path}")
-    done = _run([ssh_keygen(), "-Y", "sign", "-f", str(key_path), "-n", namespace], data, timeout)
+    done = _run([ssh_keygen(), "-Y", "sign", "-f", str(key), "-n", namespace], data, timeout)
     signature = done.stdout.decode("utf-8", "replace")
     if done.returncode != 0 or "BEGIN SSH SIGNATURE" not in signature:
         raise SigningError("ssh-keygen could not sign (wrong passphrase, no device, or bad key)")
