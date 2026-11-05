@@ -188,8 +188,62 @@ def _report(args: argparse.Namespace) -> int:
         )
         return 1
     summary = summarize(ledger.records())
-    print(json.dumps(summary, indent=2) if args.json else render_text(summary))
-    return 0
+    checkpoints = _checkpoint_status(ledger, project_dir)
+    if args.json:
+        print(json.dumps({**summary, "checkpoints": checkpoints}, indent=2))
+    else:
+        print(render_text(summary))
+        print(_render_checkpoints(checkpoints))
+    return 1 if checkpoints.get("failures") else 0
+
+
+def _checkpoint_status(ledger: Ledger, project_dir: Path) -> dict:
+    """Whether the ledger is covered by a recent signed checkpoint. Absence and age are warnings
+    here too; only a checkpoint that contradicts the ledger is a failure (ADR 0010)."""
+    from jarvis.adapters.claude_code.session import default_state_dir
+    from jarvis.core.ledger import (
+        check_checkpoints,
+        default_checkpoint_path,
+        ledger_id,
+        milestone_checkpoint_path,
+        read_checkpoint_files,
+    )
+
+    allowed_file = project_dir / ".agents" / "allowed-signers"
+    if not allowed_file.is_file():
+        return {"state": "not checked", "reason": "no .agents/allowed-signers file"}
+    identity = ledger_id(ledger)
+    if identity is None:
+        return {"state": "not checked", "reason": "the ledger is empty"}
+    text = read_checkpoint_files(
+        default_checkpoint_path(default_state_dir(), identity),
+        milestone_checkpoint_path(project_dir, identity),
+    )
+    found = check_checkpoints(ledger, text, allowed_file.read_text(encoding="utf-8"))
+    return {
+        "state": "failed" if found.failures else "checked",
+        "checked": found.checked,
+        "good": found.good,
+        "latest_seq": found.latest_seq,
+        "latest_signer": found.latest_signer,
+        "records_after_latest": found.records_after_latest,
+        "warnings": found.warnings,
+        "failures": found.failures,
+    }
+
+
+def _render_checkpoints(status: dict) -> str:
+    if status["state"] == "not checked":
+        return f"Checkpoints: not checked ({status['reason']})"
+    lines = [f"Checkpoints: {status['good']} of {status['checked']} good"]
+    if status["latest_seq"] is not None:
+        lines[0] += (
+            f"; newest at seq {status['latest_seq']} signed by {status['latest_signer']}, "
+            f"{status['records_after_latest']} records after it"
+        )
+    lines += [f"  WARNING: {w}" for w in status["warnings"]]
+    lines += [f"  FAILED: {f}" for f in status["failures"]]
+    return "\n".join(lines)
 
 
 def _read_stdin() -> str:

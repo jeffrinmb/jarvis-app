@@ -331,3 +331,117 @@ def test_the_doctor_notes_when_a_ledger_has_no_signed_checkpoint(tmp_path, monke
     args = ["hook", "doctor", "--mode", "enforce", "--policy-source", "directory"]
     assert main([*args, "--policy-dir", str(root)]) == 0
     assert "no signed ledger checkpoint" in capsys.readouterr().out
+
+
+# ---------- milestone checkpoints and the report (P2.9e) ----------
+
+
+def test_a_milestone_checkpoint_is_also_written_inside_the_project(
+    ledger, keys, allowed, tmp_path, monkeypatch, capsys
+):
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    allowed_file = tmp_path / "allowed"
+    allowed_file.write_text(allowed, encoding="utf-8")
+    state = ["--state-dir", str(tmp_path / "state")]
+    assert cli_checkpoint(ledger, keys["alice"], allowed_file, "--milestone", *state) == 0
+    assert "commit it through a pull request" in capsys.readouterr().out
+    (committed,) = (project / ".agents" / "checkpoints").glob("*.jsonl")
+    assert committed.read_text(encoding="utf-8").count("\n") == 1
+    stored = json.loads(committed.read_text(encoding="utf-8"))
+    assert set(stored) == {
+        "schema_version",
+        "ledger_id",
+        "seq",
+        "hash",
+        "created_at",
+        "signature",
+    }  # ids, a hash and a signature: no event data
+
+    # With the per-user copy gone, the committed one still counts when no path is given.
+    shutil.rmtree(tmp_path / "state")
+    assert cli_verify(ledger, allowed_file, "--checkpoints", *state) == 0
+    assert "1 of 1 good" in capsys.readouterr().out
+
+
+def test_without_the_milestone_flag_nothing_is_written_in_the_project(
+    ledger, keys, allowed, tmp_path, monkeypatch
+):
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    allowed_file = tmp_path / "allowed"
+    allowed_file.write_text(allowed, encoding="utf-8")
+    state = ["--state-dir", str(tmp_path / "state")]
+    assert cli_checkpoint(ledger, keys["alice"], allowed_file, *state) == 0
+    assert not (project / ".agents").exists()
+
+
+@pytest.fixture
+def reported(tmp_path, monkeypatch, allowed):
+    """A project whose ledger the hook report reads, with its own state directory."""
+    root = tmp_path / "proj"
+    (root / ".agents").mkdir(parents=True)
+    ledger = Ledger(root / ".agents" / "ledger" / "events.jsonl")
+    for n in range(4):
+        ledger.append(note(n))
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
+    return root, ledger
+
+
+def test_the_report_says_it_did_not_check_without_an_allowed_signers_file(reported, capsys):
+    assert main(["hook", "report"]) == 0
+    assert "Checkpoints: not checked (no .agents/allowed-signers file)" in capsys.readouterr().out
+
+
+def test_the_report_warns_when_there_is_no_checkpoint(reported, allowed, capsys):
+    root, _ = reported
+    (root / ".agents" / "allowed-signers").write_text(allowed, encoding="utf-8")
+    assert main(["hook", "report"]) == 0
+    out = capsys.readouterr().out
+    assert "Checkpoints: 0 of 0 good" in out and "WARNING: no signed checkpoint" in out
+
+
+def test_the_report_shows_a_good_checkpoint_and_the_records_after_it(
+    reported, keys, allowed, tmp_path, capsys
+):
+    root, ledger = reported
+    (root / ".agents" / "allowed-signers").write_text(allowed, encoding="utf-8")
+    create_checkpoint(ledger, keys["alice"], allowed, state_dir=tmp_path / "state")
+    ledger.append(note(9))
+    assert main(["hook", "report"]) == 0
+    out = capsys.readouterr().out
+    assert "1 of 1 good" in out and "signed by alice, 1 records after it" in out
+    assert "WARNING" not in out
+
+
+def test_the_report_warns_about_a_stale_checkpoint(reported, keys, allowed, tmp_path, capsys):
+    root, ledger = reported
+    (root / ".agents" / "allowed-signers").write_text(allowed, encoding="utf-8")
+    old = datetime.now(UTC) - timedelta(days=30)
+    create_checkpoint(ledger, keys["alice"], allowed, state_dir=tmp_path / "state", now=old)
+    assert main(["hook", "report"]) == 0
+    assert "older than 7 days" in capsys.readouterr().out
+
+
+def test_the_report_fails_on_a_checkpoint_the_ledger_contradicts(
+    reported, keys, allowed, tmp_path, capsys
+):
+    root, ledger = reported
+    (root / ".agents" / "allowed-signers").write_text(allowed, encoding="utf-8")
+    create_checkpoint(ledger, keys["alice"], allowed, state_dir=tmp_path / "state")
+    lines = ledger.path.read_bytes().split(b"\n")
+    ledger.path.write_bytes(b"\n".join(lines[:2]) + b"\n")  # truncated after the checkpoint
+    assert main(["hook", "report"]) == 1
+    assert "FAILED" in capsys.readouterr().out
+
+
+def test_the_json_report_carries_the_checkpoint_status(reported, keys, allowed, tmp_path, capsys):
+    root, ledger = reported
+    (root / ".agents" / "allowed-signers").write_text(allowed, encoding="utf-8")
+    create_checkpoint(ledger, keys["alice"], allowed, state_dir=tmp_path / "state")
+    assert main(["hook", "report", "--json"]) == 0
+    status = json.loads(capsys.readouterr().out)["checkpoints"]
+    assert status["state"] == "checked" and status["good"] == 1 and status["failures"] == []
