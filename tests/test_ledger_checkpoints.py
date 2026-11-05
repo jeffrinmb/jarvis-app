@@ -461,10 +461,12 @@ def test_the_same_checkpoint_in_two_files_counts_once(ledger, keys, allowed, tmp
     assert check_checkpoints(ledger, text, allowed).good == 1
 
 
-def test_a_tilde_in_the_key_path_is_expanded_by_the_program(keys, tmp_path, monkeypatch):
+def test_a_tilde_in_the_key_path_is_expanded_by_the_program(tmp_path, monkeypatch):
     home = tmp_path / "home"
     (home / ".ssh").mkdir(parents=True)
-    shutil.copy(keys["alice"], home / ".ssh" / "approver")
+    # Generated in place, not copied: ssh-keygen sets the file permissions that Windows OpenSSH
+    # insists on, and a copy would inherit looser ones and be refused.
+    make_key(home / ".ssh", "approver")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))  # what Windows uses
     signature = signing.sign(b"data", "~/.ssh/approver", NS_CHECKPOINT)
