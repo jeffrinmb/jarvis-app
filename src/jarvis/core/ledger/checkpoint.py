@@ -72,13 +72,18 @@ def append_checkpoint(checkpoint: Checkpoint, checkpoint_file: Path) -> None:
 
 
 def read_checkpoint_files(*paths: Path | None) -> str:
-    """The text of every checkpoint file that exists, joined (a missing file adds nothing)."""
-    parts = []
+    """The checkpoint lines of every file that exists, joined. A missing file adds nothing, and
+    a line that appears in more than one file (the per-user copy and the committed one are the
+    same signed line) counts once."""
+    seen: set[str] = set()
+    lines = []
     for path in paths:
         if path is not None and path.is_file():
-            text = path.read_text(encoding="utf-8")
-            parts.append(text if text.endswith("\n") else text + "\n")
-    return "".join(parts)
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if line.strip() and line not in seen:
+                    seen.add(line)
+                    lines.append(line)
+    return "".join(line + "\n" for line in lines)
 
 
 def create_checkpoint(

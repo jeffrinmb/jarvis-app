@@ -144,3 +144,13 @@ Method lesson: my own cleanup commands (killing servers to reset state) left sta
 The scheduled check's first report (2026-11-05) flagged "no `model_call` rows since 11-04 11:46Z". That was a false alarm: the check ran before the morning's first turns finished, and the ledger had token rows from 03Z and 04Z that day. The quiet stretch on 11-04 was real idleness (one policy decision between 11Z and 03Z).
 
 The report also noticed a recurring `error`: "transcript path is not a regular file", on `SubagentStop`, three times in a week. The hook was reading the subagent's own transcript (`agent_transcript_path`) and Claude Code had no file at that path, for three of the five subagents whose files I could compare. It is a gap in the token record, not a fault, so a missing subagent transcript is now a `note` (`usage_capture_skipped`) with no path in it, and `error` is kept for real failures, including a missing main transcript. Not established: why Claude Code has no file for some subagents (asynchronous writing or clean-up are both consistent with the evidence).
+
+## Round 6: signing the first checkpoint
+
+Two defects showed up the first time the maintainer signed a real checkpoint, both in code that its tests had passed.
+
+- **`--key ~/.ssh/key` failed in PowerShell and cmd** with "signing key not found: ~/.ssh/key". Bash expands `~` before the program sees it; PowerShell and cmd pass it through, and the program used the text as a path. `signing.sign` now expands `~` itself, so every command that takes a key (`checkpoint`, `approvals approve`, the doctor) behaves the same in every shell. Checked for real in PowerShell, cmd and Git Bash, in both the `--key ~/...` and `--key=~/...` forms, with a throwaway key in a temporary home folder. Not covered: the `~user` form (Python does not support it on Windows).
+- **One checkpoint was counted twice** ("2 of 2 good"). `--milestone` writes the same signed line to the per-user file and to the project, and the report read both. Identical lines are now counted once. The earlier tests had removed one copy before checking, so they never saw it.
+
+A fixture lesson: Windows OpenSSH refuses a private key that other users can read ("Bad permissions"), and my first throwaway key inherited loose permissions, which looked like a failure of the fix until I ran `ssh-keygen` directly.
+
