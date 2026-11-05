@@ -432,6 +432,19 @@ def _capture_usage(inp: HookInput, ctx: HookContext) -> HookResult:
     path = (
         inp.agent_transcript_path if inp.hook_event_name == "SubagentStop" else inp.transcript_path
     )
+    if path and inp.hook_event_name == "SubagentStop" and not Path(path).is_file():
+        # Seen live three times in a week: Claude Code had no file at the subagent's path (it
+        # writes these asynchronously and may not keep them). That is a gap in the token record,
+        # not a fault in the hook, so say so with a note and keep `error` for real failures. The
+        # path itself is not recorded; the ledger never holds paths from the payload.
+        _ledger(ctx).append(
+            _note(
+                inp,
+                ctx,
+                {"event": "usage_capture_skipped", "reason": "subagent transcript not found"},
+            )
+        )
+        return HookResult()
     if path:
         capture_usage(inp, ctx, _ledger(ctx), path)
     return HookResult()
