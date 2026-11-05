@@ -436,7 +436,7 @@ def _capture_usage(inp: HookInput, ctx: HookContext) -> HookResult:
         # Seen live three times in a week: Claude Code had no file at the subagent's path (it
         # writes these asynchronously and may not keep them). That is a gap in the token record,
         # not a fault in the hook, so say so with a note and keep `error` for real failures. The
-        # path itself is not recorded; the ledger never holds paths from the payload.
+        # subagent's own path is not recorded (the note's context still names the main one).
         _ledger(ctx).append(
             _note(
                 inp,

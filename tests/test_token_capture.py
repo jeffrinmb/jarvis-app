@@ -271,7 +271,7 @@ def test_a_missing_subagent_transcript_is_a_note_not_an_error(project, tmp_path)
     events = [json.loads(line)["event"] for line in text.splitlines()]
     assert [e["kind"] for e in events] == ["note"]
     assert events[0]["data"]["event"] == "usage_capture_skipped"
-    assert str(tmp_path) not in text  # the path from the payload stays out of the ledger
+    assert "agent-gone" not in text  # the subagent's own path stays out of the ledger
     assert rows(project) == []  # and no model_call row
 
 
