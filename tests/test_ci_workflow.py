@@ -83,3 +83,15 @@ def test_dependabot_keeps_actions_and_python_dependencies_current():
     config = yaml.safe_load((ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
     ecosystems = {u["package-ecosystem"] for u in config["updates"]}
     assert {"github-actions", "uv"} <= ecosystems
+
+
+def test_checkpoint_history_job_compares_with_the_base_commit(workflow):
+    job = workflow["jobs"]["checkpoint-history"]
+    checkout = next(
+        s for s in job["steps"] if str(s.get("uses", "")).startswith("actions/checkout")
+    )
+    assert checkout["with"]["fetch-depth"] == 0, "the base commit must be fetched"
+    run = next(s for s in job["steps"] if "checkpoint-history" in str(s.get("run", "")))
+    assert "agentctl checkpoint-history --base" in run["run"]
+    assert "github.event.pull_request.base.sha" in run["env"]["BASE_SHA"]
+    assert "github.event.before" in run["env"]["BASE_SHA"]

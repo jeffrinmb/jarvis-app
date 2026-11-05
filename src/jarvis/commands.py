@@ -25,6 +25,10 @@ from pydantic import ValidationError
 
 from jarvis.adapters.claude_code import default_state_dir
 from jarvis.approvals_cli import REFUSED_KINDS, add_approvals_parser, run_approvals_command
+from jarvis.checkpoint_history_cli import (
+    add_checkpoint_history_parser,
+    run_checkpoint_history_command,
+)
 from jarvis.core.approvals import make_verifier
 from jarvis.core.killswitch import clear_halt, halt_path, read_halt, set_halt
 from jarvis.core.ledger import (
@@ -235,6 +239,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     add_hook_parser(sub)
     add_approvals_parser(sub)
+    add_checkpoint_history_parser(sub)
 
     return parser
 
@@ -535,6 +540,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "hook":
         return run_hook_command(args)
+
+    if args.command == "checkpoint-history":
+        return run_checkpoint_history_command(args)
 
     ledger = Ledger(_ledger_path(args.ledger))
 

@@ -9,6 +9,7 @@ from .checkpoint import (
     milestone_checkpoint_path,
     read_checkpoint_files,
 )
+from .checkpoint_history import check_history
 from .ledger import (
     GENESIS_HASH,
     Ledger,
@@ -30,6 +31,7 @@ __all__ = [
     "VerifyResult",
     "canonical_json",
     "check_checkpoints",
+    "check_history",
     "compute_hash",
     "create_checkpoint",
     "default_checkpoint_path",
