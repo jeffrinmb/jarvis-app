@@ -108,6 +108,14 @@
       "title": "Schema Version",
       "type": "integer"
     },
+    "secrets_in_input": {
+      "description": "Kinds of secret the adapter found in this call's input (for example github-token), never the secret itself. Filled by the adapter's own scan, not by the agent. Empty means none was found, or the input was not scanned",
+      "items": {
+        "type": "string"
+      },
+      "title": "Secrets In Input",
+      "type": "array"
+    },
     "session": {
       "$ref": "#/$defs/SessionState"
     },

@@ -41,4 +41,10 @@ class Action(StrictModel):
         default_factory=list,
         description="Trust labels of the content that directly feeds this action",
     )
+    secrets_in_input: list[str] = Field(
+        default_factory=list,
+        description="Kinds of secret the adapter found in this call's input (for example "
+        "github-token), never the secret itself. Filled by the adapter's own scan, not by the "
+        "agent. Empty means none was found, or the input was not scanned",
+    )
     session: SessionState = Field(default_factory=SessionState)

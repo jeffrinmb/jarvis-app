@@ -183,6 +183,12 @@ class Policy(StrictModel):
     budgets: Budgets | None = None
     anomalies: Anomalies | None = None
     approvals: ApprovalSettings = Field(default_factory=ApprovalSettings)
+    secrets_in_input: Literal["human", "alert"] = Field(
+        default="human",
+        description="What a secret found in the input of a tool that writes, runs commands or "
+        "sends data does. human: a person decides; alert: the kinds are only recorded. It can "
+        "never allow, and a read-only tool is never stopped by it (task P2.12)",
+    )
 
     @model_validator(mode="after")
     def _check(self) -> Policy:

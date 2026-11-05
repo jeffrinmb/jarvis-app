@@ -110,6 +110,7 @@ def decision_event(
             "approval_grant_ids": verdict.approval_grant_ids,
             "approval_request": verdict.approval_request,
             "fingerprint": fingerprint(action.tool_id, action.paths),
+            "secrets_in_input": sorted(action.secrets_in_input),
             "matches": [
                 {"rule_id": m.rule_id, "category": m.category, "effect": m.effect.value}
                 for m in verdict.matches

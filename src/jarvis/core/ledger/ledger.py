@@ -30,6 +30,7 @@ from pydantic import ValidationError
 
 from jarvis.core.filelock import LockTimeoutError, file_lock
 from jarvis.core.schemas import Event
+from jarvis.core.security.redact import redact_value
 
 GENESIS_HASH = "0" * 64
 _RECORD_KEYS = {"seq", "prev_hash", "event", "hash"}
@@ -109,6 +110,11 @@ class Ledger:
             yield LedgerTransaction(self)
 
     def _append_locked(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Every write passes through here, so this is where secrets and personal data in the
+        # free-form detail are replaced (task P2.12, threat model T-5). The hash covers what is
+        # stored, so a verified ledger never holds the redacted text.
+        if "data" in payload:
+            payload = {**payload, "data": redact_value(payload["data"])}
         last = self._last_record()
         seq = 0 if last is None else last["seq"] + 1
         prev = GENESIS_HASH if last is None else last["hash"]

@@ -22,6 +22,7 @@ from jarvis.core.observability import span_id_for, trace_id_for
 from jarvis.core.policy import matches_any, normalize_path
 from jarvis.core.schemas import Action, DataClass, Environment, TrustLabel
 from jarvis.core.schemas.action import SessionState
+from jarvis.core.security.redact import find_secrets_in
 
 from .config import HookConfig
 from .payload import HookInput
@@ -359,6 +360,8 @@ def build_action(
         environment=Environment(cfg.environment),
         paths=paths,
         diff_lines=diff_lines_for(claude_tool, inp.tool_input),
+        # The kinds only: the input itself is never kept (task P2.12).
+        secrets_in_input=find_secrets_in(inp.tool_input),
         session=session_state,
     )
     exposure = exposure_for(claude_tool, tool_id, inp.tool_input, paths, cfg)

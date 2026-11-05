@@ -380,6 +380,20 @@ def evaluate(
             )
         )
 
+    if (
+        action.secrets_in_input
+        and tool.effect != Effect.READ_ONLY
+        and policy.secrets_in_input == "human"
+    ):
+        matches.append(
+            _builtin(
+                "secret-in-input",
+                Decision.HUMAN,
+                "the input looks like it holds a secret "
+                f"({', '.join(sorted(action.secrets_in_input))}); a human must decide",
+            )
+        )
+
     if tool.approval == Approval.HUMAN:
         matches.append(
             RuleMatch(
