@@ -58,7 +58,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 |---|---|---|
 | G1: `role` and `agent_id` are claimed, not authenticated (ASI03, RT-08) | P2.9, P2.9a | Planned; must precede enforcing mode |
 | G2: policy, registry and project files are ordinary files (T-2, RT-15) | P2.4b, P4.2 | Partly built: trusted policy source, ADR 0004; the sandbox is planned |
-| G4: ledger events are unsigned (ASI07, RT-12) | P2.9b, P2.9e, P2.9f | Partly built: signed approvals and signed checkpoints, with milestone files and a stale warning in `hook report` (ADR 0010); routine events stay unsigned |
+| G4: ledger events are unsigned (ASI07, RT-12) | P2.9b, P2.9e, P2.9f | Partly built: signed approvals and signed checkpoints, with milestone files, a stale warning in `hook report` and a CI check that committed checkpoints only grow (ADR 0010); routine events stay unsigned |
 | G5: no kill switch or anomaly detection (ASI08, ASI10, RT-14) | P2.8, P2.8a, P2.8c | Partly built: budgets, loop breaker, kill switch and anomaly rules (ADR 0005, 0006); domains and data volumes planned |
 | T-1: ledger truncation or rewrite | P2.1a, P2.1b | Partly built: anchors exist, automation planned |
 | T-3: the action is not the real tool call (RT-03) | P2.6, P2.6a, P2.6b | Partly built: tested with realistic payloads |
