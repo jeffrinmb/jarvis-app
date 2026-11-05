@@ -263,6 +263,25 @@ def test_stop_ignores_a_subagent_path_and_a_subagent_stop_without_one_records_no
     assert len(rows(project)) == 1
 
 
+def test_a_missing_subagent_transcript_is_a_note_not_an_error(project, tmp_path):
+    main = write(tmp_path / "main.jsonl", record("parent_1"))
+    gone = tmp_path / "agent-gone.jsonl"  # never written
+    handle(subagent_stop(project, main, gone), ctx_for(project, tmp_path))
+    text = (project / ".agents" / "ledger" / "events.jsonl").read_text(encoding="utf-8")
+    events = [json.loads(line)["event"] for line in text.splitlines()]
+    assert [e["kind"] for e in events] == ["note"]
+    assert events[0]["data"]["event"] == "usage_capture_skipped"
+    assert "agent-gone" not in text  # the subagent's own path stays out of the ledger
+    assert rows(project) == []  # and no model_call row
+
+
+def test_a_missing_main_transcript_is_still_an_error(project, tmp_path):
+    handle(stop(project, tmp_path / "missing.jsonl"), ctx_for(project, tmp_path))
+    text = (project / ".agents" / "ledger" / "events.jsonl").read_text(encoding="utf-8")
+    kinds = [json.loads(line)["event"]["kind"] for line in text.splitlines()]
+    assert kinds == ["error"]
+
+
 def test_message_time_is_used_and_a_future_time_is_not(project, tmp_path):
     past = "2026-01-02T03:04:05+00:00"
     future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
