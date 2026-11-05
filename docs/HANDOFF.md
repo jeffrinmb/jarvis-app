@@ -37,7 +37,7 @@ The project is an early build. Pull requests 1 to 26 are merged to `main`, and n
 | `P0.6` | Compliance scope, including the EU AI Act dates on EUR-Lex | Retention and oversight requirements |
 | `P0.10a` | Check the employment contract's IP clause | The repository is public under Apache-2.0 |
 | `P0.13` | Final project name and trademark check | Renaming gets harder once the hook is installed in other projects |
-| `P0.16` | Create each approver's SSH signing key (a hardware security key for anyone approving no-go zones) and add the public keys by pull request | Without a key listed, no signed approval counts; `P2.9d` cannot test the touch requirement without a real one |
+| `P0.16` | Create each approver's SSH signing key (a hardware security key for anyone approving no-go zones) and add the public keys by pull request | One software key is listed (2026-11-05); it proves a name, not a person, because an agent running as that user could use it. A hardware key and other approvers are still missing, and `P2.9d` cannot test the touch requirement without a real one |
 | `P2.10a` | How strict the taint rule is, and which shell prefixes are allowed | The intervention rate is too high to enforce today |
 | `P2.10` | Switch the hook to enforce mode | Needs `P2.9a`, Claude Code 2.1.295 or later, and a low intervention rate first |
 
