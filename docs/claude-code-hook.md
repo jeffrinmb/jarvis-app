@@ -130,7 +130,7 @@ The hook does not see token counts in its input, but every event carries `transc
 
 Every decision records: the tool and its registry id, the project-relative paths, the verdict and the rule ids that produced it, the session id, the permission mode, the tool-use id, whether the session was tainted, a fingerprint of the tool and paths (for the loop breaker), the policy source (for example `git:<ref>@<commit prefix>`) and whether it is protected, and a SHA-256 of the policy, registry and project files in force. The ledger is hash-chained, so edits to it are detected.
 
-**Never recorded:** file contents, command text, tool output or error text. Secret redaction proper arrives with P2.12, so for now the hook simply keeps that material out.
+**Never recorded:** file contents, command text, tool output or error text. As a second layer ([ADR 0013](adr/0013-redaction-and-secret-scanning.md), P2.12), the ledger replaces secrets and personal data (emails, card numbers) in an event's free-form `data` with `[REDACTED:kind]` before it is written, and the hook scans each call's input for secrets: when one is found in the input of a tool that writes, runs commands or sends data, a person decides (`builtin:secret-in-input`), and the ledger records only the kind, such as `github-token`. Set `secrets_in_input: alert` in the policy to record without stopping. It matches known formats, so it reduces the risk and does not remove it, and a file that contains a fake token will ask a person.
 
 ## How a call is classified
 

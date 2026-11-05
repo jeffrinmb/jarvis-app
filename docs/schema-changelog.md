@@ -56,6 +56,10 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 
 ### Unreleased
 
+- `action`: new optional `secrets_in_input`, the kinds of secret the adapter found in a call's input (never the secret). It is filled by the adapter's own scan, defaults to empty, and an agent cannot make the gate more lenient by setting it. Existing documents are unchanged.
+
+- `policy`: new `secrets_in_input` (`human` or `alert`, default `human`): what a secret found in the input of a tool that writes, runs commands or sends data does. A person decides by default, so a policy that did not set it now stops such a call for a person; `alert` only records the kinds. It can never allow, and a read-only tool is never stopped by it (P2.12). This tightens the default, so it is recorded here.
+
 - New schema `ledger-checkpoint` (version 1): a signed statement that at record `seq` the ledger's hash was `hash`, with the ledger id (the first record's hash), a time and an SSH signature in the namespace `jarvis-checkpoint`. The signer is not stored; it is whoever the allowed-signers file names for the key. One checkpoint per line in an append-only file kept outside the ledger (task P2.9b, [ADR 0010](adr/0010-identity-and-signing.md)).
 
 - `approval-grant`: new optional `nonce` and `signature` (an SSH signature, namespace `jarvis-approval`, over the request id, nonce and scope; the approver is not signed because it comes from the allowed-signers file). A signature needs a nonce and a command-line grant (task P2.9a, [ADR 0010](adr/0010-identity-and-signing.md)).

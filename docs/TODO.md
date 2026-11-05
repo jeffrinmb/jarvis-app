@@ -105,7 +105,7 @@ Goal: every action is logged, risky actions are stopped, humans can approve with
 - [ ] **P2.10** Review the log-only data (how often would the gate have blocked, how many overrides), tune thresholds, then switch to enforcing. Enforcing mode needs Claude Code 2.1.295 or later for `onFailure: block`, and P2.9a must be done first (PS, FO)
 - [ ] **P2.11** Start the small red-team suite and the eval skeleton (formalised in phase 6) (PS, ME)
 
-- [ ] **P2.12** Redact secrets and personal data before anything is written to the ledger or a decision card; scan tool input and output (threat model T-5) (PS, PL)
+- [x] **P2.12** Redact secrets and personal data, and scan tool input, built as [ADR 0013](adr/0013-redaction-and-secret-scanning.md) decided with the owner: the ledger's one write point replaces secrets (well-known token formats, URL credentials, `password=` assignments, private key blocks) and personal data (emails, Luhn-valid card numbers) in an event's `data` with `[REDACTED:kind]` before hashing, leaving signatures and digests alone; the hook scans a call's input and, for a tool that writes, runs commands or sends data, a secret in it needs a human (`builtin:secret-in-input`; policy `secrets_in_input` is `human` by default or `alert`) with only the kinds recorded. **Not covered:** tool output, text outside `data`, secrets in unknown formats, and records written before this. Heuristic: expect false positives and misses (PS, PL)
 
 Exit check: a risky action is blocked and approved by a named human, the hash chain verifies, and a budget breach parks a task.
 
