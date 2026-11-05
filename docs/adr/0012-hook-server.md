@@ -43,9 +43,18 @@ The client's own cost over a bare interpreter fell from about 370 ms to about 75
 - About 2 times faster per call on this machine, with the overhead above bare Python cut about five times. It does **not** reach the 200 ms target on its own: the Python start (about 110 to 150 ms here) is still paid on every call. Only the `http` route removes that.
 - **A same-user limit that stays.** The secret is a file the same user can read, so an agent running as that user can read it and talk to the server, or kill it. This stops other programs, web pages and other users, not an agent with a shell, the same limit as the kill switch and the approval flow until the sandbox (P4.2). In enforce mode a killed server means the client falls back to in-process, which still decides and logs, so killing it gains the agent nothing.
 - **A forged event needs the secret.** Anyone holding it could post hook events (adding bogus decisions or outcomes to the ledger). It is the same class of access as writing the ledger file (G4), and signed checkpoints (ADR 0010) still detect rewrites.
-- On Windows a venv's `python.exe` is a launcher, so one server shows as two processes. Harmless.
+- On Windows a venv's `pythonw.exe` is a launcher, so one server shows as two `pythonw.exe` processes. Harmless.
 - A server that dies mid-request in enforce mode blocks that one call (by design) and the next call falls back.
 - The client stays standard-library only; a test checks that a call that finds a server loads neither pydantic nor the hook.
+
+## Found in live use (2026-11-04), and fixed
+
+The server was switched on for the maintainer's real Claude Code hook on the same day. Two things the tests had not caught:
+
+1. **A terminal window opened on Windows.** The server was started with `DETACHED_PROCESS`, which leaves it with no console. A venv's `python.exe` is a launcher that starts the real interpreter, a console program, and with no console to inherit Windows opened a new Windows Terminal window for it (title: the venv's `python.exe`). Fix: on Windows the server runs under **`pythonw.exe`**, the windowed interpreter, which never creates a console, with the same creation flags as before. An attempt to start it with `CREATE_NO_WINDOW` alone (without `DETACHED_PROCESS`) was found dead within about 30 seconds under the real hook, and the reason was not established, so the flags that were observed to survive were kept and a test now pins them. Verified live: the server starts, survives and no window opens.
+2. **A killed server left the client stuck on the slow path, silently.** The discovery and secret files outlive the process. After a server was killed (not stopped), crashed, or the machine restarted, the client trusted the stale files, got "connection refused" from the dead port, decided in-process and **never started a replacement**, on every call afterwards. The earlier recovery test had used a graceful `--stop`, which cleans up, so it never showed this. Fix: a connection that never reaches a server marks the files stale; the client removes them, starts a new server and tries once more (the request had not been processed, so this cannot decide twice). Tests start from stale files, with and without the ability to start a server, and one mutation check confirms they fail without the fix. Verified live by killing the running server hard and making a call: a new server started at once.
+
+Neither was a safety problem (the client's fallback decided every call correctly), which is the design working, but the first was visible and the second would have quietly removed the whole benefit.
 
 ## Not built, and tracked
 

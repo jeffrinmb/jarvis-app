@@ -61,7 +61,14 @@ _OPTIONS = {
 
 
 class Unavailable(Exception):
-    """Nothing was processed by a server: it is down, or it rejected the request first."""
+    """Nothing was processed by a server: it is down, or it rejected the request first.
+
+    ``dead`` is true when the connection never reached a server at all (refused, timed out), which
+    means the files that said a server was there are stale."""
+
+    def __init__(self, message: str, dead: bool = False) -> None:
+        super().__init__(message)
+        self.dead = dead
 
 
 class Failed(Exception):
@@ -98,7 +105,7 @@ def _request(
     try:
         connection = socket.create_connection(("127.0.0.1", port), timeout=CONNECT_TIMEOUT)
     except OSError as exc:
-        raise Unavailable(type(exc).__name__) from None
+        raise Unavailable(type(exc).__name__, dead=True) from None
     try:
         connection.settimeout(timeout)
         head = (
@@ -109,7 +116,7 @@ def _request(
         try:
             connection.sendall(head + body)  # the server reads the whole body before acting
         except OSError as exc:
-            raise Unavailable(type(exc).__name__) from None
+            raise Unavailable(type(exc).__name__, dead=True) from None
         data = b""
         try:
             while True:
@@ -168,13 +175,41 @@ def stop(spec: dict[str, Any]) -> bool:
     return status == 200
 
 
+def _spawn_options(platform: str) -> dict[str, Any]:
+    """How to start the server so it outlives this call.
+
+    On Windows these flags are the ones observed to survive when Claude Code runs the hook
+    (``DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW``). Dropping
+    ``DETACHED_PROCESS`` for ``CREATE_NO_WINDOW`` alone looks cleaner but the server was killed
+    shortly after its starter exited, so do not "tidy" this. Elsewhere a new session is enough.
+    """
+    if platform == "win32":
+        return {"creationflags": 0x00000008 | 0x00000200 | 0x08000000}
+    return {"start_new_session": True}
+
+
+def _server_interpreter(platform: str, executable: str) -> str:
+    """The interpreter to run the server with.
+
+    On Windows that is ``pythonw.exe`` beside ``executable`` when it exists. ``DETACHED_PROCESS``
+    leaves the server without a console, and a venv's ``python.exe`` is a launcher that starts the
+    real interpreter, a console program, which then makes Windows open a new terminal window with
+    no console to inherit. ``pythonw.exe`` is the windowed interpreter: it never creates a console.
+    """
+    if platform == "win32":
+        windowed = os.path.join(os.path.dirname(executable), "pythonw.exe")
+        if os.path.exists(windowed):
+            return windowed
+    return executable
+
+
 def _spawn(spec: dict[str, Any]) -> None:
     import subprocess  # only when a server has to be started
 
     directory = server_dir(spec["state_dir"])
     os.makedirs(directory, exist_ok=True)
     command = [
-        sys.executable,
+        _server_interpreter(sys.platform, sys.executable),
         "-m",
         "jarvis.hook_server",
         "--spec",
@@ -190,11 +225,7 @@ def _spawn(spec: dict[str, Any]) -> None:
             "close_fds": True,
             "cwd": directory,
         }
-        if sys.platform == "win32":
-            # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
-            options["creationflags"] = 0x00000008 | 0x00000200 | 0x08000000
-        else:
-            options["start_new_session"] = True
+        options.update(_spawn_options(sys.platform))
         subprocess.Popen(command, **options)  # noqa: S603 (our own interpreter and module)
 
 
@@ -248,9 +279,20 @@ def _ensure_server(spec: dict[str, Any]) -> tuple[int, str]:
 
 def decide(spec: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     """The server's answer for ``payload``, or ``Unavailable`` / ``Failed`` as documented above."""
-    port, secret = _ensure_server(spec)
     body = json.dumps({"v": PROTOCOL, "payload": payload}).encode("utf-8")
-    status, answer = _request(port, secret, "POST", "/hook", body)
+    port, secret = _ensure_server(spec)
+    try:
+        status, answer = _request(port, secret, "POST", "/hook", body)
+    except Unavailable as exc:
+        if not exc.dead:
+            raise
+        # The files said a server was there, but nothing answered: it was killed, crashed, or the
+        # machine restarted (the state directory outlives the process). Forget it, start a new one
+        # and try once more. Without this the client trusted the stale files forever and decided
+        # in-process on every call, silently.
+        _remove(discovery_path(spec), secret_path(spec))
+        port, secret = _ensure_server(spec)
+        status, answer = _request(port, secret, "POST", "/hook", body)
     if status == 200:
         try:
             result = json.loads(answer)

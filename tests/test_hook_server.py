@@ -363,6 +363,74 @@ def test_a_stale_secret_is_refused_so_the_client_decides_itself_and_forgets_the_
     assert not Path(discovery_path(running)).exists()  # the stale server is forgotten
 
 
+# ---------- a dead server must be replaced, not trusted forever ----------
+
+
+def leave_stale_files(spec):
+    """What a killed, crashed or rebooted-away server leaves behind: a discovery file and a
+    secret that point at a port nobody listens on."""
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+    listener.close()  # nothing listens here any more
+    os.makedirs(os.path.dirname(discovery_path(spec)), exist_ok=True)
+    Path(discovery_path(spec)).write_text(
+        json.dumps({"port": port, "pid": 1, "spec": spec_json(spec)}), encoding="utf-8"
+    )
+    Path(secret_path(spec)).write_text("d" * 64, encoding="utf-8")
+
+
+def test_a_killed_server_leaves_stale_files_and_the_client_starts_a_new_one(project, tmp_path):
+    """Found live: after a server was killed (not stopped), the client kept trying the dead port,
+    fell back to deciding in-process, and never started another. The same happens after a crash
+    or a reboot, because the state directory outlives the process."""
+    spec = make_spec(project, tmp_path)
+    leave_stale_files(spec)
+    started = []
+
+    def start_for_real(wanted):
+        started.append(1)
+        threading.Thread(target=serve, args=(wanted, 5.0), daemon=True).start()
+
+    original = client._spawn
+    client._spawn = start_for_real
+    try:
+        answer = client.decide(spec, edit(project))
+    finally:
+        client._spawn = original
+        client.stop(spec)
+    assert started == [1]  # the stale server was noticed and replaced
+    assert answer["exit_code"] == 0
+    assert len(decisions(project)) == 1  # decided once, by the new server
+
+
+def test_stale_files_are_removed_even_when_no_new_server_can_start(project, tmp_path, monkeypatch):
+    hook_env(monkeypatch, project, tmp_path)
+    spec = build_spec(
+        mode="log-only",
+        config=None,
+        state_dir=None,
+        policy_source=None,
+        policy_ref=None,
+        policy_dir=None,
+        payload_cwd=str(project),
+    )
+    leave_stale_files(spec)
+    monkeypatch.setattr(client, "_spawn", lambda wanted: (_ for _ in ()).throw(OSError("no")))
+    stdin_with(monkeypatch, edit(project))
+    assert client.main_client(["hook", "run", "--mode", "log-only", "--server"]) == 0
+    assert len(decisions(project)) == 1  # still decided, in-process, once
+    assert not Path(discovery_path(spec)).exists()  # the dead server is forgotten
+
+
+def test_a_live_server_is_not_replaced_just_because_one_request_was_refused(project, running):
+    """Only a connection that never reached a server counts as dead; a refusal by a live one
+    (bad secret) is a different case with its own handling."""
+    before = client._credentials(running)
+    assert client.decide(running, edit(project))["exit_code"] == 0
+    assert client._credentials(running) == before
+
+
 # ---------- a request that may have been processed is never decided again ----------
 
 
@@ -494,6 +562,40 @@ def test_the_snippet_can_register_the_server_flag(capsys):
     assert "--server" not in json.dumps(
         __import__("jarvis.adapters.claude_code", fromlist=["build_settings"]).build_settings()
     )
+
+
+# ---------- starting the server must never open a window ----------
+
+CREATE_NEW_PROCESS_GROUP = 0x00000200
+DETACHED_PROCESS = 0x00000008
+CREATE_NO_WINDOW = 0x08000000
+
+
+def test_on_windows_the_server_runs_under_pythonw_so_no_console_window_can_open(tmp_path):
+    """DETACHED_PROCESS leaves the server without a console, and a venv's python.exe launcher
+    starts the real interpreter (a console program) which then makes Windows open a terminal
+    window. pythonw.exe never creates a console."""
+    python = tmp_path / "python.exe"
+    pythonw = tmp_path / "pythonw.exe"
+    python.write_text("", encoding="utf-8")
+    assert client._server_interpreter("win32", str(python)) == str(python)  # no pythonw: fall back
+    pythonw.write_text("", encoding="utf-8")
+    assert client._server_interpreter("win32", str(python)) == str(pythonw)
+    assert client._server_interpreter("linux", str(python)) == str(python)
+
+
+def test_the_windows_flags_stay_the_ones_that_survive_under_claude_code():
+    """Observed: with DETACHED_PROCESS the server outlives the hook that started it; with
+    CREATE_NO_WINDOW alone it was killed within seconds. Do not drop DETACHED_PROCESS."""
+    flags = client._spawn_options("win32")["creationflags"]
+    assert (
+        flags & DETACHED_PROCESS and flags & CREATE_NO_WINDOW and flags & CREATE_NEW_PROCESS_GROUP
+    )
+
+
+def test_elsewhere_the_server_gets_its_own_session():
+    options = client._spawn_options("linux")
+    assert options == {"start_new_session": True}
 
 
 # ---------- end to end, with a real detached server ----------
