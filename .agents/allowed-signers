@@ -1,0 +1,5 @@
+# Keys allowed to approve (ADR 0010, task P0.16). One line per approver, in ssh-keygen's allowed-signers
+# format. Changes here are reviewed: they decide whose signature counts as a human approval.
+# jeffrinmb: software key (no hardware key yet). It proves a name, not a person at a keyboard,
+# because an agent running as this user could also use it; replace it with a security key (P2.9d).
+jeffrinmb namespaces="jarvis-approval,jarvis-checkpoint" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPwN50JBNFYQlv7mLLXkN/H++0ScxxHU0C42NVmzgvAX
