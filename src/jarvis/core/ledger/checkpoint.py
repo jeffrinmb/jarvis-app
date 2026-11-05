@@ -29,6 +29,7 @@ from jarvis.core.signing import NS_CHECKPOINT
 from .ledger import Ledger
 
 DEFAULT_MAX_AGE_DAYS = 7
+MILESTONE_DIR = Path(".agents") / "checkpoints"
 
 
 def canonical_payload(ledger_id: str, seq: int, hash_: str, created_at: datetime) -> bytes:
@@ -57,6 +58,29 @@ def default_checkpoint_path(state_dir: Path, ledger_identity: str) -> Path:
     return Path(state_dir) / "checkpoints" / f"{ledger_identity[:16]}.jsonl"
 
 
+def milestone_checkpoint_path(project_dir: Path, ledger_identity: str) -> Path:
+    """Where a checkpoint is kept inside the project, to be committed through a pull request."""
+    return Path(project_dir) / MILESTONE_DIR / f"{ledger_identity[:16]}.jsonl"
+
+
+def append_checkpoint(checkpoint: Checkpoint, checkpoint_file: Path) -> None:
+    checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(checkpoint.model_dump(mode="json"), sort_keys=True) + "\n"
+    with file_lock(checkpoint_file.with_name(checkpoint_file.name + ".lock"), timeout=5.0):
+        with checkpoint_file.open("ab") as handle:
+            handle.write(line.encode("utf-8"))
+
+
+def read_checkpoint_files(*paths: Path | None) -> str:
+    """The text of every checkpoint file that exists, joined (a missing file adds nothing)."""
+    parts = []
+    for path in paths:
+        if path is not None and path.is_file():
+            text = path.read_text(encoding="utf-8")
+            parts.append(text if text.endswith("\n") else text + "\n")
+    return "".join(parts)
+
+
 def create_checkpoint(
     ledger: Ledger,
     key_path: str | Path,
@@ -65,8 +89,12 @@ def create_checkpoint(
     now: datetime | None = None,
     state_dir: Path | None = None,
     timeout: int = signing.SIGN_TIMEOUT_SECONDS,
+    milestone_file: Path | None = None,
 ) -> tuple[Checkpoint, str, Path]:
     """Sign the ledger's current head and append it to the checkpoint file.
+
+    With ``milestone_file`` the same signed line is also appended there (a file inside the
+    project, committed through a pull request so a deletion shows in history).
 
     Returns ``(checkpoint, signer, path)``. Refuses a ledger that fails verification (a person
     must not sign a lie), an empty ledger, and a key that is not in the allowed-signers file.
@@ -94,11 +122,9 @@ def create_checkpoint(
         if state_dir is None:
             raise ValueError("no place to keep the checkpoint was given")
         checkpoint_file = default_checkpoint_path(state_dir, identity)
-    checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
-    line = json.dumps(checkpoint.model_dump(mode="json"), sort_keys=True) + "\n"
-    with file_lock(checkpoint_file.with_name(checkpoint_file.name + ".lock"), timeout=5.0):
-        with checkpoint_file.open("ab") as handle:
-            handle.write(line.encode("utf-8"))
+    append_checkpoint(checkpoint, checkpoint_file)
+    if milestone_file is not None:
+        append_checkpoint(checkpoint, milestone_file)
     return checkpoint, found.principal, checkpoint_file
 
 

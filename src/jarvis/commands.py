@@ -34,6 +34,8 @@ from jarvis.core.ledger import (
     create_checkpoint,
     default_checkpoint_path,
     ledger_id,
+    milestone_checkpoint_path,
+    read_checkpoint_files,
 )
 from jarvis.core.observability import (
     OtlpSendError,
@@ -144,6 +146,11 @@ def _build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--key", required=True, help="your SSH signing key")
     checkpoint.add_argument(
         "--checkpoints", help="file to append to (default: the per-user state directory)"
+    )
+    checkpoint.add_argument(
+        "--milestone",
+        action="store_true",
+        help="also write the signed line to .agents/checkpoints/, to commit by pull request",
     )
     checkpoint.add_argument("--allowed-signers", default=".agents/allowed-signers")
     checkpoint.add_argument("--state-dir")
@@ -422,6 +429,10 @@ def _checkpoint_command(args: argparse.Namespace, ledger: Ledger) -> int:
         print(f"allowed-signers file not found: {args.allowed_signers}", file=sys.stderr)
         return 2
     state = Path(args.state_dir) if args.state_dir else default_state_dir()
+    identity = ledger_id(ledger)
+    milestone = (
+        milestone_checkpoint_path(Path.cwd(), identity) if args.milestone and identity else None
+    )
     print("Signing... touch your security key if it is waiting.", file=sys.stderr)
     try:
         made, signer, path = create_checkpoint(
@@ -430,6 +441,7 @@ def _checkpoint_command(args: argparse.Namespace, ledger: Ledger) -> int:
             allowed,
             Path(args.checkpoints) if args.checkpoints else None,
             state_dir=state,
+            milestone_file=milestone,
         )
     except (ValueError, SigningError) as exc:
         print(f"cannot checkpoint: {exc}", file=sys.stderr)
@@ -438,6 +450,8 @@ def _checkpoint_command(args: argparse.Namespace, ledger: Ledger) -> int:
         print(f"ledger error: {type(exc).__name__}", file=sys.stderr)
         return 1
     print(f"checkpoint {made.seq}:{made.hash[:12]} signed by {signer} -> {path}")
+    if milestone is not None:
+        print(f"also written to {milestone}: commit it through a pull request")
     return 0
 
 
@@ -451,10 +465,17 @@ def _verify_checkpoints(args: argparse.Namespace, ledger: Ledger) -> int:
     if args.checkpoints == "auto":
         identity = ledger_id(ledger)
         state = Path(args.state_dir) if args.state_dir else default_state_dir()
-        path = default_checkpoint_path(state, identity) if identity else None
+        paths = (
+            [
+                default_checkpoint_path(state, identity),
+                milestone_checkpoint_path(Path.cwd(), identity),
+            ]
+            if identity
+            else []
+        )
     else:
-        path = Path(args.checkpoints)
-    text = path.read_text(encoding="utf-8") if path is not None and path.is_file() else ""
+        paths = [Path(args.checkpoints)]
+    text = read_checkpoint_files(*paths)
     report = check_checkpoints(ledger, text, allowed, args.max_age_days)
     if report.checked:
         newest = (

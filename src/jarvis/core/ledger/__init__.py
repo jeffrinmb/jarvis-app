@@ -6,6 +6,8 @@ from .checkpoint import (
     create_checkpoint,
     default_checkpoint_path,
     ledger_id,
+    milestone_checkpoint_path,
+    read_checkpoint_files,
 )
 from .ledger import (
     GENESIS_HASH,
@@ -31,5 +33,7 @@ __all__ = [
     "compute_hash",
     "create_checkpoint",
     "default_checkpoint_path",
+    "milestone_checkpoint_path",
+    "read_checkpoint_files",
     "ledger_id",
 ]
