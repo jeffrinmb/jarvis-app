@@ -5,6 +5,10 @@ role: builder
 environment: dev
 on_behalf_of: jeffrinmb
 
+# Record the first one or two plain words of each shell command (never arguments), so the shell
+# prefixes that may be allowed can be chosen from evidence (task P2.10a). Remove when done.
+record_command_prefixes: true
+
 # The app's own UI tools are vetted, so their output is trusted (MCP output is otherwise untrusted).
 trust_overrides:
   mcp__ccd_turn__update_plan: internal
