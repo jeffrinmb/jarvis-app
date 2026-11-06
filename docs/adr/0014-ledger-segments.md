@@ -1,6 +1,6 @@
 # ADR 0014: Rotating the ledger into archived segments
 
-- Status: Accepted (segments built; the carried summary and the fast gate path are the next step)
+- Status: Accepted and built (segments, then the carried summary and the fast gate path)
 - Date: 2026-11-06
 - Deciders: project owner (chose rotation over a summary file or an in-memory index), Claude Code (implementation)
 
@@ -26,20 +26,42 @@ The maintainer's real ledger gained about 1,000 records in a day of use, so the 
 5. **Signed checkpoints keep working.** A checkpoint's ledger id is the hash of the very first record, which is now in the first archive; `ledger_id()` reads through the archive, so ids and old checkpoints are unchanged, and a truncation after a rotation is still caught.
 6. **When it happens.** `agentctl ledger rotate` (refuses a ledger that fails verification) and `agentctl ledger status` are the manual path. A `Ledger` built with `rotate_bytes` rotates by itself when a write finds the active file at least that big; the hook will set it in the next step.
 
-## What this does not do yet
+## The carried summary (built)
 
-Segments alone do not make the gate faster, because the gate still reads every segment. The next step (still P2.4a) makes the `ledger_rotated` record **carry a summary** of what the gate needs from older history, so a call reads only the active file:
+Segments alone do not make the gate faster, because it would still read every segment. So the `ledger_rotated` record **carries a summary** of everything before it, and the gate starts from that and folds only the active file. One module (`jarvis.core.ledger.summary`) does the folding for the gate, for rotation and for `verify`, so there is one implementation, and the gate's usage and approval code was rebuilt on top of it.
 
-- per task: number of counted decisions, total diff lines, and the last few decisions (fingerprint, verdict, time) for the loop breaker, denial window and burst rule;
-- ledger-wide: the number of counted decisions, the set of tools seen, and calls per day;
-- every approval event and every grant id used, verbatim (they are rare), so approval state folds the same way.
+What the summary holds:
 
-The summary sits inside a chained record, so it is tamper-evident, and `verify` will recompute it from the archives and fail on a difference. The gate will use it only when the policy's windows fit inside what the summary keeps; otherwise it reads every segment, as today. The test that matters is equivalence: for randomised ledgers, a decision from the summary plus the active file must equal the decision from the full history, reason text included.
+- per task, for ever: the number of counted decisions, total diff lines, and the number of decisions (a few dozen bytes each);
+- per task, only while it was active in the last two days and only the last 50: the decisions themselves (fingerprint, verdict, time), which the loop breaker, denial window and burst rule read;
+- ledger-wide: the number of counted decisions, the tools used, calls per day, every approval event verbatim (they are rare) and every approval grant id that was used, so a spent single-use approval stays spent.
+
+**It never changes a decision; it only decides how much to read.** For a task whose recent list is incomplete (more than 50 decisions, or idle for days), `exact_for` checks whether the policy's loop, denial and burst windows still fit inside what was kept. When they do not, the gate folds the whole ledger, exactly as before. A link record without a usable summary (for example one written before summaries existed) is treated the same way.
+
+**Tamper-evident.** The summary is inside a chained record, and `verify` recomputes it from the records before each link, replaying the same steps rotation took, and fails on any difference, including a summary edited with the hash chain rebuilt to match.
+
+**Equivalence is tested, not argued.** The old counting code is kept in the tests as a reference and the new fold is compared with it on random histories; a summary taken at a random cut plus the later records is compared with the whole history for many tasks and windows; and the same random sequence of real gate decisions (tools, paths, roles, approvals, budgets, loop and anomaly rules) is run on a ledger that rotates every few records and on one that never rotates, and every verdict, reason text included, must be identical. Eleven mutations of the summary and gate code each make a test fail, one of which (a spent single-use approval coming back to life after a rotation) first survived and now has its own test.
+
+**Measured** (warm, in-process decision, synthetic ledger with decisions 30 s apart, this machine, which varies 2 to 3 times in speed between hours):
+
+| Records | Before | After (rotation at 1 MB) |
+|---|---|---|
+| 100 | 19 to 41 ms | 35 ms |
+| 2,000 | 44 to 83 ms | 40 ms |
+| 10,000 | 166 to 274 ms | 41 ms |
+| 40,000 | 631 to 1,027 ms | 46 ms |
+
+The hook rotates by default when a write finds the active file at 1,000,000 bytes (`ledger_rotate_bytes` in the adapter config; unset turns it off). Whole-history readers (`verify`, `tokens report`, the OpenTelemetry export, the checkpoint check, `hook report`) still read every segment.
+
+**Found while measuring.** My first benchmark wrote all its events at the same instant, and the gate then correctly fell back to reading everything, because with 60 or more calls inside the burst window it cannot be sure from a short list. A real task needs more than 50 decisions within `burst_seconds` (60 in the example policy) for that to happen, and then the answer is still right, only slower.
+
+**Other details.** Rotation is only an optimisation, so if the rename fails (Windows refuses to rename a file another process has open) the write goes through and the next write tries again. Token capture on `Stop` looks for message ids already recorded by reading only the lines that mention `model_call`, across every segment, so a session that spans a rotation is not recorded twice.
 
 ## Consequences
 
-- Readers that want the whole history (`verify`, `tokens report`, OpenTelemetry export, checkpoints, the report) read all segments and are as slow as before; only the hook's own path will get faster.
-- The token-capture step on `Stop` looks for message ids it already recorded across the whole ledger; it will need a cheap scan of the archives (a substring filter before parsing) so a session that spans a rotation does not record its messages twice. This is part of the next step.
+- Readers that want the whole history (`verify`, `tokens report`, OpenTelemetry export, checkpoints, the report) read all segments and are as slow as before; only the hook's own path got faster.
+- The summary grows with the number of tasks (a few dozen bytes each, so well under a megabyte a year at today's pace), because per-task totals are kept for ever: dropping one would let a resumed task start from zero. Compacting very old tasks is future work.
+- `verify` now also folds every record to recompute the summaries, so it is somewhat slower.
 - Retention: archives are never deleted by the framework, so "keep for at least six months" is met by leaving them alone. Access control on the archive folder is the operating system's, and compression, off-machine copies and a deletion policy are not built (P2.1b stays open for them).
 - A new event kind, `ledger_rotated`, is added (an additive schema change recorded in the changelog). A consumer that does not know the kind must ignore it, and the framework's own consumers do.
 
