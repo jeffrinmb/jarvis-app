@@ -50,6 +50,9 @@ MAX_BODY = 8 * 1024 * 1024
 LOG_LIMIT = 100_000
 
 
+DRAIN_SECONDS = 15.0
+
+
 class HookHttpServer(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -60,26 +63,110 @@ class HookHttpServer(ThreadingHTTPServer):
         self.idle_seconds = idle_seconds
         self.last_request = time.monotonic()
         self.key = spec_key(spec)
+        self._connections = 0
+        self._lock = threading.Lock()
+        self._released = False
 
     def touch(self) -> None:
         self.last_request = time.monotonic()
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        """A client that leaves in the middle of a request is normal, not an error to print."""
+        if isinstance(sys.exc_info()[1], OSError):
+            return
+        super().handle_error(request, client_address)
+
+    # ---------- connections in progress, so a shutdown can wait for them ----------
+
+    def connection_opened(self) -> None:
+        with self._lock:
+            self._connections += 1
+
+    def connection_closed(self) -> None:
+        with self._lock:
+            self._connections -= 1
+
+    def drain(self, timeout: float = DRAIN_SECONDS) -> bool:
+        """Wait until no connection is being handled. True if they all finished in time."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            with self._lock:
+                if self._connections <= 0:
+                    return True
+            time.sleep(0.01)
+        return False
+
+    # ---------- the files that tell clients where to find this server ----------
+
+    def release_files(self) -> None:
+        """Remove this server's discovery and secret files, but only if they are still its own.
+
+        A client that read them just before this ran can still connect and be dropped; the
+        client's handshake (see ``hook_client``) tells it nothing was processed, so it starts a
+        new server and asks again. Removing only our own files means a shutdown that finishes late
+        can never delete the files of the server that replaced us.
+        """
+        try:
+            with open(discovery_path(self.spec), encoding="utf-8") as handle:
+                mine = json.load(handle).get("pid") == os.getpid()
+        except (OSError, ValueError, AttributeError):
+            mine = False
+        if mine:
+            _unlink(discovery_path(self.spec))
+        try:
+            with open(secret_path(self.spec), encoding="utf-8") as handle:
+                ours = hmac.compare_digest(handle.read().encode(), self.secret.encode())
+        except OSError:
+            ours = False
+        if ours:
+            _unlink(secret_path(self.spec))
+
+    def begin_shutdown(self) -> None:
+        """Stop serving: stop being found first, then stop the loop. Safe to call twice."""
+        with self._lock:
+            if self._released:
+                return
+            self._released = True
+        self.release_files()
+        threading.Thread(target=self.shutdown, daemon=True).start()
+
+
+def _unlink(path: str) -> None:
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
 
 
 class _Handler(BaseHTTPRequestHandler):
     server_version = "jarvis-hook"
     sys_version = ""
-    protocol_version = "HTTP/1.0"  # one request per connection, closed by the server
+    # HTTP/1.1 so that a client can ask "may I send the body?" with `Expect: 100-continue` and
+    # learn that a dying server never read its request. Still one request per connection.
+    protocol_version = "HTTP/1.1"
 
     server: HookHttpServer
 
     def log_message(self, *args: Any) -> None:  # never log requests: they carry tool calls
         return
 
+    def setup(self) -> None:
+        super().setup()
+        self.server.connection_opened()
+
+    def finish(self) -> None:
+        try:
+            super().finish()
+        finally:
+            self.server.connection_closed()
+
     def _reply(self, status: int, body: dict[str, Any] | None = None) -> None:
         data = json.dumps(body).encode("utf-8") if body is not None else b""
+        self.close_connection = True
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(data)
 
@@ -104,26 +191,52 @@ class _Handler(BaseHTTPRequestHandler):
         self.server.touch()
         self._reply(200, {"ok": True, "pid": os.getpid(), "key": self.server.key, "v": PROTOCOL})
 
-    def do_POST(self) -> None:
+    def _call_length(self) -> int | None:
+        """The size of the call's body, once the request has passed every check that needs only
+        the headers; otherwise the refusal has been sent and this is ``None``."""
         if not self._authorised():
-            return
-        if self.path == "/stop":
-            self._reply(200, {"stopping": True})
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
-            return
+            return None
         if self.path != "/hook":
             self._reply(404)
-            return
+            return None
         if not (self.headers.get("Content-Type") or "").lower().startswith("application/json"):
             self._reply(415)
-            return
+            return None
         try:
             length = int(self.headers.get("Content-Length", ""))
         except ValueError:
             self._reply(411)
-            return
+            return None
         if not 0 <= length <= MAX_BODY:
             self._reply(413)
+            return None
+        return length
+
+    def handle_expect_100(self) -> bool:
+        """Agree to read the body only for a request that will be accepted.
+
+        Saying ``100 Continue`` first and refusing afterwards made the client send a body into a
+        connection the server was about to close with that data unread, which resets the
+        connection and can discard the refusal before the client reads it (seen on Windows). A
+        request that will be refused gets its final answer now, and no body is ever sent."""
+        if self.command == "POST" and self.path == "/stop":
+            if not self._authorised():
+                return False
+        elif self._call_length() is None:
+            return False
+        self.send_response_only(100)
+        self.end_headers()
+        return True
+
+    def do_POST(self) -> None:
+        if self.path == "/stop":
+            if not self._authorised():
+                return
+            self._reply(200, {"stopping": True})
+            self.server.begin_shutdown()
+            return
+        length = self._call_length()
+        if length is None:
             return
         raw = self.rfile.read(length)
         try:
@@ -202,7 +315,7 @@ def serve(spec: dict[str, Any], idle_minutes: float = DEFAULT_IDLE_MINUTES) -> i
             time.sleep(min(5.0, max(server.idle_seconds / 4, 0.05)))
             if time.monotonic() - server.last_request > server.idle_seconds:
                 _log(spec, "idle: shutting down")
-                server.shutdown()
+                server.begin_shutdown()
                 return
 
     threading.Thread(target=watch_idle, daemon=True).start()
@@ -210,11 +323,9 @@ def serve(spec: dict[str, Any], idle_minutes: float = DEFAULT_IDLE_MINUTES) -> i
         server.serve_forever(poll_interval=0.2)
     finally:
         server.server_close()
-        for path in (discovery_path(spec), secret_path(spec)):
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
+        if not server.drain():  # a request still running after this long is left to the client
+            _log(spec, "stopped with a request still running")
+        server.release_files()
         _log(spec, "stopped")
     return 0
 

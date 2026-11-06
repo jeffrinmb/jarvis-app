@@ -434,8 +434,10 @@ def test_a_live_server_is_not_replaced_just_because_one_request_was_refused(proj
 # ---------- a request that may have been processed is never decided again ----------
 
 
-def silent_server(spec):
-    """A 'server' that accepts the request and closes without answering."""
+def silent_server(spec, acknowledge=True):
+    """A 'server' that takes the call and then closes without answering. With ``acknowledge`` it
+    first says ``100 Continue`` (it agreed to read the call, so it may have decided it); without,
+    it closes before reading anything, like a server that is shutting down."""
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     listener.listen(1)
@@ -447,7 +449,10 @@ def silent_server(spec):
 
     def accept():
         conn, _ = listener.accept()
-        conn.recv(65536)
+        conn.recv(65536)  # the headers
+        if acknowledge:
+            conn.sendall(b"HTTP/1.1 100 Continue\r\n\r\n")
+            conn.recv(65536)  # the body
         conn.close()
         listener.close()
 

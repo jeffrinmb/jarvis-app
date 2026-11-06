@@ -56,7 +56,7 @@ The five biggest, from the [threat model](threat-model.md): role and agent ident
 
 ## Not verified
 
-- Enforce mode, how `ask` behaves in the desktop app, a crashing hook, `bypassPermissions`, and the Windows Git Bash shell form (`P2.6c`).
+- Enforce mode on a real session (a call right after a server stop is covered, `P2.6h`, with real hook processes but not a live Claude Code session), how `ask` behaves in the desktop app, a crashing hook, `bypassPermissions`, and the Windows Git Bash shell form (`P2.6c`).
 - The full OWASP agentic document (only the ten risk names were checked), the EU Digital Omnibus dates on EUR-Lex, and the products in the charter's section 16 table marked unverified.
 
 ## Corrections already made (do not repeat these)

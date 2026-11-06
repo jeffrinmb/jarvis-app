@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from typing import Any
 
 CONNECT_TIMEOUT = 2.0
+HANDSHAKE_TIMEOUT = 3.0  # how long a server may take to say it will read a call
 REQUEST_TIMEOUT = 8.0  # the hook's own timeout is longer; a healthy server answers in ~50 ms
 START_WAIT_SECONDS = 6.0
 START_LOCK_STALE_SECONDS = 30.0
@@ -92,6 +93,32 @@ def _remove(*paths: str) -> None:
             pass
 
 
+def _handshake(connection: socket.socket) -> tuple[bool, bytes]:
+    """Wait for the server to say it will read the body (``100 Continue``).
+
+    Returns ``(True, b"")`` to send the body now, or ``(False, bytes)`` when the server answered
+    without asking for it (a rejection), with what it has said so far. Raises ``Unavailable``
+    (dead) when the connection ends or stalls first: the server never read the call, so nothing
+    was processed and it is safe to ask a fresh server."""
+    connection.settimeout(HANDSHAKE_TIMEOUT)
+    seen = b""
+    try:
+        while b"\r\n\r\n" not in seen:
+            chunk = connection.recv(4096)
+            if not chunk:
+                raise Unavailable("the server closed the connection before reading the call", True)
+            seen += chunk
+            if len(seen) > MAX_RESPONSE:
+                raise Unavailable("the server's first answer was too large", True)
+    except OSError as exc:
+        raise Unavailable(
+            f"no answer before the call was read ({type(exc).__name__})", True
+        ) from None
+    if seen.startswith(b"HTTP/1.1 100"):
+        return True, seen.partition(b"\r\n\r\n")[2]
+    return False, seen
+
+
 def _request(
     port: int,
     secret: str,
@@ -100,24 +127,39 @@ def _request(
     body: bytes = b"",
     timeout: float = REQUEST_TIMEOUT,
 ) -> tuple[int, bytes]:
-    """One HTTP exchange over loopback. ``Unavailable`` if it never reached the server,
-    ``Failed`` if it did and no answer came back."""
+    """One HTTP exchange over loopback. ``Unavailable`` if the server never read the request,
+    ``Failed`` if it did and no answer came back.
+
+    A request that carries a call (a body) is sent in two steps: the headers with
+    ``Expect: 100-continue``, then the body once the server has said it will read it. A server
+    that is shutting down accepts a connection and drops it without ever answering; the
+    handshake is what tells that apart from a server that took the call and then died."""
     try:
         connection = socket.create_connection(("127.0.0.1", port), timeout=CONNECT_TIMEOUT)
     except OSError as exc:
         raise Unavailable(type(exc).__name__, dead=True) from None
     try:
         connection.settimeout(timeout)
+        two_steps = bool(body)
         head = (
             f"{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
             f"Authorization: Bearer {secret}\r\nContent-Type: application/json\r\n"
-            f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n"
+            f"Content-Length: {len(body)}\r\nConnection: close\r\n"
+            + ("Expect: 100-continue\r\n" if two_steps else "")
+            + "\r\n"
         ).encode("ascii")
+        data = b""
         try:
-            connection.sendall(head + body)  # the server reads the whole body before acting
+            if two_steps:
+                connection.sendall(head)
+                proceed, data = _handshake(connection)
+                connection.settimeout(timeout)
+                if proceed:
+                    connection.sendall(body)  # the server reads the whole body before acting
+            else:
+                connection.sendall(head + body)
         except OSError as exc:
             raise Unavailable(type(exc).__name__, dead=True) from None
-        data = b""
         try:
             while True:
                 chunk = connection.recv(65536)
