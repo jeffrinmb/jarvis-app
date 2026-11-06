@@ -27,6 +27,10 @@ class Usage:
     history: int = 0  # decisions in the ledger that were not denied, all tasks
     tool_seen: bool = True  # this tool was used (not denied) before; True when not measured
     burst: int = 0  # the task's calls within the last `burst_seconds`
+    domain_history: int = 0  # decisions that were not denied and named a host, all tasks
+    new_domains: tuple[str, ...] = ()  # hosts this call names that no earlier call named
+    task_bytes: int = 0  # input bytes of the task's earlier calls to tools that send data outward
+    call_bytes: int = 0  # the same for this call
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,7 @@ def compute_usage(
     now: datetime,
     anomalies: Anomalies | None = None,
     base: LedgerSummary | None = None,
+    outbound_bytes: int = 0,
 ) -> Usage:
     """Count from the ledger. A timestamp that cannot be read is not counted toward the day or
     a burst; the per-task, loop, denial and tool counts do not depend on timestamps.
@@ -69,7 +74,9 @@ def compute_usage(
     if budgets is None and anomalies is None:
         return Usage()
     summary = base if base is not None else LedgerSummary(keep=None)
-    return usage_from_summary(summary.fold(records), action, budgets, now, anomalies)
+    return usage_from_summary(
+        summary.fold(records), action, budgets, now, anomalies, outbound_bytes
+    )
 
 
 def usage_from_summary(
@@ -78,6 +85,7 @@ def usage_from_summary(
     budgets: Budgets | None,
     now: datetime,
     anomalies: Anomalies | None = None,
+    outbound_bytes: int = 0,
 ) -> Usage:
     if budgets is None and anomalies is None:
         return Usage()
@@ -107,7 +115,24 @@ def usage_from_summary(
         if anomalies.burst_seconds:
             since = now - timedelta(seconds=anomalies.burst_seconds)
             burst = sum(1 for _, d, m in recent if d in COUNTED and m is not None and m >= since)
-    return Usage(task_calls, day_calls, repeats, denials, summary.history, tool_seen, burst)
+    new_domains = (
+        tuple(sorted(d for d in set(action.domains) if d not in summary.domains_seen))
+        if anomalies is not None and anomalies.new_domain
+        else ()
+    )
+    return Usage(
+        task_calls,
+        day_calls,
+        repeats,
+        denials,
+        summary.history,
+        tool_seen,
+        burst,
+        summary.domain_history,
+        new_domains,
+        stats.out_bytes if stats is not None else 0,
+        outbound_bytes,
+    )
 
 
 def detect_anomalies(
@@ -136,6 +161,39 @@ def detect_anomalies(
             Anomaly(
                 "builtin:anomaly-new-tool",
                 f"this tool has not been used before in {usage.history} earlier decisions",
+            )
+        )
+    if (
+        anomalies.new_domain
+        and usage.new_domains
+        and usage.domain_history >= anomalies.new_domain_min_history
+    ):
+        shown = ", ".join(usage.new_domains[:3]) + (", ..." if len(usage.new_domains) > 3 else "")
+        found.append(
+            Anomaly(
+                "builtin:anomaly-new-domain",
+                f"this call names {shown}, not named before in {usage.domain_history} "
+                "earlier calls that named a host",
+            )
+        )
+    if anomalies.max_call_bytes is not None and usage.call_bytes > anomalies.max_call_bytes:
+        found.append(
+            Anomaly(
+                "builtin:anomaly-call-bytes",
+                f"this call carries {usage.call_bytes} bytes outward, more than "
+                f"{anomalies.max_call_bytes}",
+            )
+        )
+    if (
+        anomalies.max_task_bytes is not None
+        and usage.call_bytes > 0  # only a call that sends data is stopped, not later local work
+        and usage.task_bytes + usage.call_bytes > anomalies.max_task_bytes
+    ):
+        found.append(
+            Anomaly(
+                "builtin:anomaly-task-bytes",
+                f"this task has sent {usage.task_bytes + usage.call_bytes} bytes outward, more "
+                f"than {anomalies.max_task_bytes}",
             )
         )
     if anomalies.burst_calls is not None and usage.burst >= anomalies.burst_calls:

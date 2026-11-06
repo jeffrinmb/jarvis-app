@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-SUMMARY_VERSION = 1
+SUMMARY_VERSION = 2
 RECENT_KEEP = 50
 RECENT_DAYS = 2
 COUNTED = frozenset({"allow", "council", "human"})
@@ -53,6 +53,7 @@ class TaskStats:
     calls: int = 0  # decisions that were not denied
     diff_lines: int = 0  # their summed diff lines
     n: int = 0  # all decisions
+    out_bytes: int = 0  # input bytes of its counted calls to tools that send data outward
     last_ts: str | None = None
     # [fingerprint, decision, ts] for the task's decisions, oldest first
     recent: list[list[Any]] = field(default_factory=list)
@@ -68,6 +69,8 @@ class LedgerSummary:
         self.untasked = TaskStats()
         self.history = 0
         self.tools_seen: set[str] = set()
+        self.domains_seen: set[str] = set()
+        self.domain_history = 0  # counted decisions that named at least one host
         self.day_calls: dict[str, int] = {}
         self.approval_events: list[dict[str, Any]] = []
         self.used_grant_ids: set[str] = set()
@@ -113,6 +116,13 @@ class LedgerSummary:
             tool_id = (event.get("tool") or {}).get("id")
             if isinstance(tool_id, str):
                 self.tools_seen.add(tool_id)
+            domains = [d for d in data.get("domains") or [] if isinstance(d, str)]
+            if domains:
+                self.domains_seen.update(domains)
+                self.domain_history += 1
+            sent = data.get("outbound_bytes")
+            if isinstance(sent, int) and not isinstance(sent, bool) and sent > 0:
+                stats.out_bytes += sent
         if decision == "allow":
             ids = data.get("approval_grant_ids")
             if isinstance(ids, list):
@@ -159,6 +169,7 @@ class LedgerSummary:
                 "calls": stats.calls,
                 "diff_lines": stats.diff_lines,
                 "n": stats.n,
+                "out_bytes": stats.out_bytes,
                 "last_ts": stats.last_ts,
                 "recent": recent,
             }
@@ -170,6 +181,8 @@ class LedgerSummary:
             "tasks": {k: pack(v) for k, v in sorted(self.tasks.items())},
             "untasked": pack(self.untasked),
             "tools_seen": sorted(self.tools_seen),
+            "domains_seen": sorted(self.domains_seen),
+            "domain_history": self.domain_history,
             "day_calls": dict(sorted(self.day_calls.items())),
             "approval_events": self.approval_events,
             "used_grant_ids": sorted(self.used_grant_ids),
@@ -187,6 +200,8 @@ class LedgerSummary:
             summary.untasked = _stats(data["untasked"])
             summary.tasks = {str(k): _stats(v) for k, v in dict(data["tasks"]).items()}
             summary.tools_seen = {str(t) for t in list(data["tools_seen"])}
+            summary.domains_seen = {str(d) for d in list(data["domains_seen"])}
+            summary.domain_history = _int(data["domain_history"])
             summary.day_calls = {str(k): _int(v) for k, v in dict(data["day_calls"]).items()}
             events = list(data["approval_events"])
             if not all(isinstance(e, dict) for e in events):
@@ -212,4 +227,25 @@ def _stats(raw: Any) -> TaskStats:
     last = raw["last_ts"]
     if last is not None and not isinstance(last, str):
         raise ValueError("bad time")
-    return TaskStats(_int(raw["calls"]), _int(raw["diff_lines"]), _int(raw["n"]), last, recent)
+    return TaskStats(
+        _int(raw["calls"]),
+        _int(raw["diff_lines"]),
+        _int(raw["n"]),
+        _int(raw["out_bytes"]),
+        last,
+        recent,
+    )
+
+
+def as_version_1(data: dict[str, Any]) -> dict[str, Any]:
+    """A version 2 summary as version 1 wrote it (without the host and outbound-volume fields),
+    so ``verify`` can still check a link written before those fields existed."""
+    old = {k: v for k, v in data.items() if k not in ("domains_seen", "domain_history")}
+    old["v"] = 1
+    old["tasks"] = {k: _without_bytes(v) for k, v in data["tasks"].items()}
+    old["untasked"] = _without_bytes(data["untasked"])
+    return old
+
+
+def _without_bytes(task: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in task.items() if k != "out_bytes"}

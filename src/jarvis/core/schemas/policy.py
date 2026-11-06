@@ -133,6 +133,29 @@ class Anomalies(StrictModel):
         default=None, gt=0, description="Trip at this many calls by one task within burst_seconds"
     )
     burst_seconds: int | None = Field(default=None, gt=0)
+    new_domain: bool = Field(
+        default=False,
+        description="Trip on a call that names a host no earlier call (that was not denied) "
+        "named, once new_domain_min_history such calls exist",
+    )
+    new_domain_min_history: int = Field(
+        default=20,
+        ge=1,
+        description="Do not judge a host new until this many earlier decisions that were not "
+        "denied named some host, so a fresh ledger does not flag every first call",
+    )
+    max_call_bytes: int | None = Field(
+        default=None,
+        gt=0,
+        description="Trip on one call to a tool that sends data outward whose input is bigger "
+        "than this many bytes",
+    )
+    max_task_bytes: int | None = Field(
+        default=None,
+        gt=0,
+        description="Trip when a task's calls to tools that send data outward have carried more "
+        "than this many bytes in total, so many small calls cannot add up unnoticed",
+    )
     on_anomaly: Literal["alert", "human", "deny"] = "human"
 
     @model_validator(mode="after")

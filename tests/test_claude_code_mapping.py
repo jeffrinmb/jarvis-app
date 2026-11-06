@@ -357,7 +357,10 @@ def test_the_description_field_is_ignored(tmp_path):
     )
     a = build_action(honest, CFG, root, SessionState()).action
     b = build_action(liar, CFG, root, SessionState()).action
-    assert a == b
+    # Nothing the gate decides on changes. The only difference is the measured input size, and
+    # extra text can only raise that figure, never lower it.
+    assert a.model_copy(update={"data_bytes": 0}) == b.model_copy(update={"data_bytes": 0})
+    assert b.data_bytes > a.data_bytes
 
 
 def test_role_and_identity_come_from_configuration_not_from_the_input(tmp_path):

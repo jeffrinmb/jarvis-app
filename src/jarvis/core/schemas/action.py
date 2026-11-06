@@ -41,6 +41,19 @@ class Action(StrictModel):
         default_factory=list,
         description="Trust labels of the content that directly feeds this action",
     )
+    domains: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Hosts named in this call's input (a URL's host, lowercase, with no path, "
+        "query or credentials). Filled by the adapter's own scan, not by the agent",
+    )
+    data_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description="Size in bytes of this call's input as the adapter measured it, which bounds "
+        "what a tool that sends data outward can carry. The gate counts it only for tools whose "
+        "registry effect is external-comms. Filled by the adapter, not by the agent",
+    )
     secrets_in_input: list[str] = Field(
         default_factory=list,
         description="Kinds of secret the adapter found in this call's input (for example "

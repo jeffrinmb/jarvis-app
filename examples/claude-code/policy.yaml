@@ -31,6 +31,10 @@ anomalies:
   new_tool_min_history: 50
   burst_calls: 60         # 60 calls by one task within a minute
   burst_seconds: 60
+  new_domain: true        # a call that names a host no earlier call named, once there is a baseline
+  new_domain_min_history: 20
+  max_call_bytes: 200000  # one call to a tool that sends data outward carrying more than 200 KB
+  max_task_bytes: 2000000 # a task that has sent more than 2 MB outward in total
   on_anomaly: human
 
 auto_approve:
