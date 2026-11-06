@@ -10,11 +10,14 @@ auto_approve:
     when:
       tools: ["fs.read", "shell.read", "claude.internal"]
   - id: edits-in-project
-    description: Edits of up to 400 lines to source, tests and documentation
+    description: Edits to source, tests and documentation, up to 2000 changed lines in all per session
     when:
       tools: ["fs.write"]
       paths: ["src/**", "tests/**", "docs/**", "examples/**", "README.md", "CONTRIBUTING.md"]
-      max_diff_lines: 400
+      # Counted for the whole session (the Claude Code hook treats a session as one task), so it
+      # stops a session rewriting thousands of lines in small pieces. It was 400, which a long
+      # session passed after 37 of 999 decisions and which then asked about every edit (P2.10a).
+      max_diff_lines: 2000
   - id: test-runs
     description: Running the project's tests and linters
     when:

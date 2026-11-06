@@ -47,6 +47,9 @@ auto_approve:
     when:
       tools: ["fs.write"]
       paths: ["src/**", "tests/**", "docs/**", "examples/**", "README.md", "CONTRIBUTING.md"]
+      # Cumulative for the task, and the Claude Code hook treats a whole session as one task, so a
+      # long session passes this and every later edit asks. This repository raised it to 2000
+      # (docs/adr/0015-prompt-rate-decisions.md); pick the number that suits how long yours run.
       max_diff_lines: 400
   - id: test-runs
     description: Running the project's tests and linters

@@ -56,6 +56,8 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 
 ### Unreleased
 
+- `action`: new optional `command_prefixes`, the first one or two plain words of each command in a shell line (never arguments), filled by the adapter only when its configuration asks for it. Defaults to empty, so existing documents are unchanged (P2.10a).
+
 - `action`: new optional `domains` (hosts named in the call's input, at most 20) and `data_bytes` (the input's size in bytes), both filled by the adapter's own scan and defaulting to empty and unset. The gate counts bytes only for `external-comms` tools. Existing documents are unchanged (P2.8c).
 
 - `policy`: `anomalies` gains `new_domain` (default off), `new_domain_min_history` (default 20), `max_call_bytes` and `max_task_bytes` (both unset by default). Every detector is still off until set, so existing policies behave as before (P2.8c).

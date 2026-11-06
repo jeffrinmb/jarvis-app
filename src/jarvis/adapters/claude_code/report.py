@@ -22,6 +22,7 @@ def summarize(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
     modes: Counter[str] = Counter()
     permission_modes: Counter[str] = Counter()
     shell_classes: Counter[str] = Counter()
+    prefixes: Counter[str] = Counter()
     sessions: set[str] = set()
     patterns: dict[tuple[str, str, tuple[str, ...]], dict[str, Any]] = {}
     tainted = trifecta = unhealthy = 0
@@ -45,6 +46,9 @@ def summarize(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
         permission_modes[str(context.get("permission_mode"))] += 1
         if context.get("shell_class"):
             shell_classes[context["shell_class"]] += 1
+        for prefix in data.get("command_prefixes") or []:
+            if isinstance(prefix, str):
+                prefixes[prefix] += 1
         if context.get("session_id"):
             sessions.add(context["session_id"])
         tainted += bool(event.get("tainted"))
@@ -81,6 +85,7 @@ def summarize(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "trifecta_decisions": trifecta,
         "unhealthy_session_state": unhealthy,
         "shell_classes": dict(shell_classes),
+        "shell_prefixes": dict(prefixes.most_common(30)),
         "by_tool": {tool: dict(counts) for tool, counts in sorted(by_tool.items())},
         "rules": [
             {"rule_id": rule, "effect": effect, "count": count}
@@ -128,6 +133,9 @@ def render_text(summary: dict[str, Any]) -> str:
     if summary["unmapped_tools"]:
         lines += ["", "Claude Code tools with no mapping (denied as unregistered):"]
         lines += [f"  {name:42} {count}" for name, count in summary["unmapped_tools"].items()]
+    if summary.get("shell_prefixes"):
+        lines += ["", "shell command prefixes (what the shell prompts are made of):"]
+        lines += [f"  {count:4}  {name}" for name, count in summary["shell_prefixes"].items()]
     if summary["rules"]:
         lines += ["", "rules that fired:"]
         lines += [

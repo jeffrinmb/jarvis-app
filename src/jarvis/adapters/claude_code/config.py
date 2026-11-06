@@ -137,6 +137,14 @@ class HookConfig(StrictModel):
         ]
     )
 
+    record_command_prefixes: bool = Field(
+        default=False,
+        description="Record the first one or two plain words of each shell command (for example "
+        "`git add`), never the arguments, so the allowed prefixes can be chosen from evidence "
+        "instead of guesswork (task P2.10a). Off by default: the ledger otherwise records no "
+        "command text",
+    )
+
     # Behaviour when the gate says council or human in enforce mode.
     non_interactive: bool = Field(
         default=False,

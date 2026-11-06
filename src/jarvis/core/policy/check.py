@@ -129,6 +129,7 @@ def decision_event(
             "fingerprint": fingerprint(action.tool_id, action.paths),
             "secrets_in_input": sorted(action.secrets_in_input),
             "domains": action.domains[:MAX_LOGGED_DOMAINS],
+            "command_prefixes": action.command_prefixes,
             "outbound_bytes": outbound_bytes,
             "matches": [
                 {"rule_id": m.rule_id, "category": m.category, "effect": m.effect.value}
