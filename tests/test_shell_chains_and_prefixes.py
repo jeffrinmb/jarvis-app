@@ -154,7 +154,7 @@ def test_the_action_for_a_chain_uses_the_safe_tool_and_a_leading_cd_still_works(
         ("git add docs/x.md", ["git add"]),
         ("git commit -m 'a message'", ["git commit"]),
         ("git -C somewhere status", ["git"]),
-        ("uv run python - <<EOF\nprint(1)\nEOF", ["uv run", "(other)", "EOF"]),
+        ("uv run python - <<EOF\nprint(1)\nEOF", ["uv run"]),
         ("/c/Users/someone/proj/.venv/Scripts/python.exe -I s.py", ["python.exe"]),
         ("cd /d/Proj && uv run pytest -q", ["cd", "uv run"]),
         ("a | b ; c || d && e", ["a", "b", "c", "d", "e"]),
@@ -181,6 +181,17 @@ def test_a_secret_in_the_arguments_never_reaches_the_prefix(command):
     joined = " ".join(command_prefixes_for(command))
     for secret in ("abc123", "SECRETPASSWORD", "hunter2", "/etc", "deploy@"):
         assert secret not in joined
+
+
+def test_only_the_first_line_counts_so_a_script_is_never_recorded():
+    heredoc = "python - <<'EOF'\nassert old in s\nopen('mapping.py').write(new)\nEOF"
+    assert command_prefixes_for(heredoc) == ["python"]
+    message = "git commit -m 'first line\nsecond line\nthird'"
+    assert command_prefixes_for(message) == ["git commit"]
+    separators = "python - <<EOF\nx = 1; print(x)\nopen('f').read() | cat\nEOF"
+    assert command_prefixes_for(separators) == ["python"]  # later lines never become commands
+    windows = "git add x\r\nrm -rf y"
+    assert command_prefixes_for(windows) == ["git add"]
 
 
 def test_prefixes_are_capped():

@@ -264,7 +264,7 @@ def classify_command(command: str, cfg: HookConfig) -> str:
 
 
 _WORD = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
-_COMMAND_SEPARATORS = re.compile(r"&&|\|\||[;|\n]")
+_COMMAND_SEPARATORS = re.compile(r"&&|\|\||[;|]")
 MAX_PREFIXES = 10
 
 
@@ -273,9 +273,12 @@ def command_prefixes_for(command: str) -> list[str]:
     shell prompts are made of (task P2.10a). Never the arguments: the second word is kept only if
     it is a plain word (not a flag, a path or an assignment), the first word is its file name
     without any directory, and a ``cd`` is recorded without its target. Anything else is
-    ``(other)``. The ledger redacts what it stores as well."""
+    ``(other)``. Only the first line counts: a heredoc or a multi-line message is not a list of
+    commands, and recording its later lines would record the content of a script. The ledger
+    redacts what it stores as well."""
     found: list[str] = []
-    for part in _COMMAND_SEPARATORS.split(command)[:MAX_PREFIXES]:
+    first_line = command.replace("\r", "").split("\n", 1)[0]
+    for part in _COMMAND_SEPARATORS.split(first_line)[:MAX_PREFIXES]:
         words = part.split()
         if not words:
             continue
