@@ -56,6 +56,8 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 
 ### Unreleased
 
+- `event`: new `kind` member `ledger_rotated`, the first record of a new ledger segment: it continues the hash chain and pins the archived segment (name, SHA-256, first and last sequence numbers, last hash) in `data`. An additive enum member; a consumer that does not know the kind must ignore it (ADR 0014, P2.1b).
+
 - `action`: new optional `secrets_in_input`, the kinds of secret the adapter found in a call's input (never the secret). It is filled by the adapter's own scan, defaults to empty, and an agent cannot make the gate more lenient by setting it. Existing documents are unchanged.
 
 - `policy`: new `secrets_in_input` (`human` or `alert`, default `human`): what a secret found in the input of a tool that writes, runs commands or sends data does. A person decides by default, so a policy that did not set it now stops such a call for a person; `alert` only records the kinds. It can never allow, and a read-only tool is never stopped by it (P2.12). This tightens the default, so it is recorded here.
