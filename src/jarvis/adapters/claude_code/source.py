@@ -145,7 +145,8 @@ class GitSource:
         # Variables such as GIT_DIR could point git at some other repository.
         env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         try:
-            return subprocess.run(
+            # Reason: git from PATH, an argument list (no shell), and a ref validated by _REF.
+            return subprocess.run(  # nosec B603 B607
                 ["git", "-C", str(self.project_dir), *args],
                 capture_output=True,
                 timeout=GIT_TIMEOUT_SECONDS,

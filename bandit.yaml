@@ -1,0 +1,10 @@
+# Bandit configuration for the framework's own code (task P1.8). CI runs
+#   bandit -c bandit.yaml -r src
+# and fails on any finding, so a new one needs a decision: fix it, or suppress it on the line
+# with `# nosec <test id> -- <reason>` (tests/test_static_analysis.py requires the reason).
+
+# B404 only says "this module imports subprocess". The framework runs git, ssh-keygen and the
+# claude CLI on purpose, and every call is still checked individually by B602 to B607, so the
+# import warning adds noise and no protection.
+skips:
+  - B404

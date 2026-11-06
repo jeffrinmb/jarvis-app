@@ -9,6 +9,8 @@ It reads the base commit with ``git`` and the current files from the working tre
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -16,6 +18,10 @@ from pathlib import Path
 from jarvis.core.ledger.checkpoint_history import CHECKPOINT_DIR, check_history
 
 ALLOWED_SIGNERS = ".agents/allowed-signers"
+
+# Same rule as the git policy source: it must start with a letter or digit, so git cannot read it
+# as an option (``--output=...``), and it may not contain "..".
+_BASE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@^~+-]{0,199}$")
 
 
 class GitError(Exception):
@@ -43,8 +49,13 @@ def _git(*args: str) -> bytes:
     git = shutil.which("git")
     if git is None:
         raise GitError("git was not found on PATH")
+    # Variables such as GIT_DIR could point git at some other repository.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     try:
-        done = subprocess.run([git, *args], capture_output=True, check=False, timeout=60)
+        # Reason: an argument list (no shell), fixed git subcommands, and a base that was validated.
+        done = subprocess.run(  # nosec B603
+            [git, *args], capture_output=True, check=False, timeout=60, env=env
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise GitError(f"git could not run: {type(exc).__name__}") from exc
     if done.returncode != 0:
@@ -84,6 +95,9 @@ def run_checkpoint_history_command(args: argparse.Namespace) -> int:
     if not base or set(base) == {"0"}:
         print("checkpoint-history: no base commit to compare with, nothing to check")
         return 0
+    if not _BASE.match(base) or ".." in base:
+        print(f"checkpoint-history: not an acceptable base commit: {base!r}", file=sys.stderr)
+        return 2
     try:
         _git("rev-parse", "--verify", f"{base}^{{commit}}")
         before = _base_files(base, args.dir)
