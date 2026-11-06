@@ -11,7 +11,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | # | Requirement | Defined in | Tasks | Status |
 |---|---|---|---|---|
 | 1 | AI across the SDLC inside enforced boundaries (autonomy tiers) | Charter 4 | P2.4, P2.5, P4.1, P4.2, P4.15 | Partly built: the policy gate |
-| 2 | Only major decisions reach a human | Charter 4.1 | P2.4, P2.7, P2.7a, P2.7b, P2.7c, P2.7d, P2.7e, P2.10, P2.10a, P6.10 | Partly built: the gate decides and approvals are recorded and checked (ADR 0009); digests and precedents planned |
+| 2 | Only major decisions reach a human | Charter 4.1 | P2.4, P2.7, P2.7a, P2.7b, P2.7c, P2.7d, P2.7e, P2.10, P2.10a, P2.10b, P6.10 | Partly built: the gate decides and approvals are recorded and checked (ADR 0009); digests and precedents planned |
 | 3 | Human in the loop: park and resume, attributed approvals, override and stop | Charter 4, 8.11 | P2.7, P2.8, P4.1, P7.7 | Partly built: the kill switch and approvals (ADR 0005, 0009); park and resume needs the orchestrator |
 | 4 | Council for high-risk decisions | Charter 4.2 | P7.1, P7.1a | Planned |
 | 5 | Token optimisation and proper token usage | Charter 7.3, 8.1, 8.2 | P2.2, P2.2a, P2.2b, P2.8, P2.8b, P3.5, P4.4a, P4.7a, P6.3 | Partly built: the token and cost ledger, report and Claude Code capture (ADR 0007, 0008); budgets planned |
