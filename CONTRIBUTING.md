@@ -41,6 +41,14 @@ CI also scans the full git history for secrets with [gitleaks](https://github.co
 gitleaks git --redact --verbose --config .gitleaks.toml .
 ```
 
+CI also runs [Bandit](https://bandit.readthedocs.io/) over `src/` and fails on any finding. To run it yourself (it is not a project dependency, so `uvx` fetches it):
+
+```bash
+uvx bandit==1.9.4 -c bandit.yaml -r src
+```
+
+If it reports something, fix it. If it is a false positive or an accepted risk, suppress it on that line with `# nosec B<id>` and put `# Reason: ...` on the line above; a test refuses a suppression without both. Do not add to `skips` in `bandit.yaml` without a reason and a review.
+
 If you changed a schema in `src/jarvis/core/schemas/`, regenerate the JSON Schemas and commit the result. A test fails if they are out of date:
 
 ```bash

@@ -72,7 +72,7 @@ Status words: **built** (code and tests exist), **partial**, **planned** (task i
 
 *Scenario.* A poisoned MCP tool description, a typo-squatted or invented package, a compromised GitHub Action or Python dependency.
 
-- **Built.** The tool registry pins versions; Python dependencies are locked in `uv.lock`; CI uses a lockfile (`uv sync --locked`). Every GitHub Action is pinned to a full commit SHA (`tests/test_ci_workflow.py::test_every_action_is_pinned_to_a_full_commit_sha`) and Dependabot proposes updates weekly (`tests/test_ci_workflow.py::test_dependabot_keeps_actions_and_python_dependencies_current`). The one downloaded tool, gitleaks, is pinned to a version and a SHA-256 and verified before it runs.
+- **Built.** The tool registry pins versions; Python dependencies are locked in `uv.lock`; Bandit (pinned) runs over our own code in CI and fails on any finding, with every suppression named and explained (P1.8, `tests/test_static_analysis.py`); CI uses a lockfile (`uv sync --locked`). Every GitHub Action is pinned to a full commit SHA (`tests/test_ci_workflow.py::test_every_action_is_pinned_to_a_full_commit_sha`) and Dependabot proposes updates weekly (`tests/test_ci_workflow.py::test_dependabot_keeps_actions_and_python_dependencies_current`). The one downloaded tool, gitleaks, is pinned to a version and a SHA-256 and verified before it runs.
 - **Planned.** A dependency allowlist and existence check (P1.5a, P4.11); MCP vetting, pinned and hashed tool definitions (P4.5).
 - **Residual.** No MCP integration exists yet, so that surface is not yet exposed.
 

@@ -65,7 +65,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 | T-11: the hook is removed, disabled or bypassed (RT-18 to RT-20) | P2.6, P2.6c, P4.2, P4.15 | Planned |
 | T-4: the gate is unavailable, or recovery skips the audit | P6.8a | Planned |
 | T-5: secrets or personal data in the repo or the ledger | P1.5, P1.5b, P2.12 | Partly built: secret scan in CI; redaction at the ledger write point and a tool-input scan (ADR 0013) |
-| T-6, T-7: CI and dependency tampering | P1.5, P1.5a, P1.8 | Partly built |
+| T-6, T-7: CI and dependency tampering | P1.5, P1.5a, P1.8 | Partly built: Bandit runs in CI on our own code (P1.8) |
 | ASI09: persuasive explanations win approvals (RT-13) | P2.7, P2.7c, P2.7e, P6.10 | Partly built: requests come from the gate's verdict (ADR 0009); diff text and fatigue metrics planned |
 
 ## Engineering and repository tasks
@@ -83,7 +83,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 | Data policy for which models see which repos (enforced by P4.7b) | P0.5 | Decision |
 | Owners and roles | P0.1 | Decision |
 | Release process for the framework | P7.12, P7.12a | Planned |
-| Defence-in-depth static analysis of our own code | P1.8 | Planned |
+| Defence-in-depth static analysis of our own code | P1.8, P1.8a | Partly built: Bandit in CI (P1.8); a data-flow analyser such as CodeQL is planned (P1.8a) |
 
 ## Deliberately not tracked
 

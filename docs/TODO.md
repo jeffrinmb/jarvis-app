@@ -52,7 +52,8 @@ Goal: stable contracts before any component is built.
 - [ ] **P1.6** ADR template and the first ADRs (storage, schema versioning, trace conventions). _Template and ADR 0001 done; schema versioning and trace conventions ADRs still to do._ (FO)
 - [x] **P1.7** Map the OWASP agentic risks (ASI01 to ASI10) to controls and red-team cases as a threat-model document: [docs/threat-model.md](threat-model.md), with 20 red-team cases and a test that checks every cited test exists (PS)
 
-- [ ] **P1.8** Static analysis (SAST) of the framework's own code in CI, for example CodeQL or Bandit, with findings triaged (PS)
+- [x] **P1.8** Static analysis of the framework's own code in CI. Built with Bandit 1.9.4 (pinned): a `static-analysis` job runs `bandit -c bandit.yaml -r src`, any finding fails it, and `ci-ok` waits for it. First run: 14 findings, all Low severity and High confidence and all about running subprocesses. Triage: seven `B404` ("imports subprocess") skipped in `bandit.yaml` because every call is checked individually; five `B603`/`B607` calls (`git`, `ssh-keygen`, `claude --version`, our own server process) suppressed on the line with `# nosec <id>` and a `# Reason:` comment; and one **real finding**: the new `checkpoint-history` command passed its `--base` to `git` without the validation the git policy source has, so a base such as `--base=--output=x` could be read as an option. It now rejects anything that does not start with a letter or digit, and scrubs `GIT_*` variables. A test keeps every suppression named and explained and the configuration limited to one skip (PS)
+- [ ] **P1.8a** CodeQL (or a similar data-flow analysis) as a second analyser, if code scanning is enabled for the repository. Bandit matches known-risky patterns; CodeQL follows data between functions and would catch what it cannot. Needs a repository setting and pinned action versions (PS)
 
 Exit check: schemas validate, CI is green, threat model reviewed.
 
