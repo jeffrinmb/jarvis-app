@@ -56,6 +56,19 @@ The server was switched on for the maintainer's real Claude Code hook on the sam
 
 Neither was a safety problem (the client's fallback decided every call correctly), which is the design working, but the first was visible and the second would have quietly removed the whole benefit.
 
+## Found in the daily check (2026-11-06), and fixed (P2.6h)
+
+The first scheduled check reported one call that ended "the hook server failed (the answer was not HTTP); the call was allowed". It was made right after another server for the same project had been stopped. I could reproduce the cause with a script: a server that is stopping (`serve --stop`, or the idle timer) keeps its discovery file and its listening socket until its loop notices, up to 0.2 s. A client that reads the file in that window connects, the operating system accepts the connection, and the server then closes it without ever reading the request. Calls made up to about 0.1 s after a stop failed about half the time (`ConnectionResetError`, or an empty answer that reads as "not HTTP"). With real hook processes in **enforce** mode, main blocked 1 of 40 legitimate calls made right after a stop, because the client, correctly, refuses to decide a call a second time once it has been sent.
+
+The client could not tell "the server dropped my request unread" from "the server took my call and died", and the second case is the one the never-decide-twice rule exists for. The fix gives it a way to tell:
+
+1. **A handshake.** A call is sent in two steps: the headers with `Expect: 100-continue`, then the body once the server has answered `100 Continue`. The server only answers after it has read the headers and committed to read the body. A connection that ends, resets or stalls before that provably carried no call, so the client forgets that server and asks a fresh one (once, as before). After the `100`, any failure is still "it may have been decided", and the call is never decided again (enforce mode blocks it; log-only lets it through with a note). Requests without a body (`/health`, `/stop`) are sent in one piece. The server now speaks HTTP/1.1 (still one request per connection, with `Connection: close`) so that it honours `Expect`.
+2. **A server that shuts down cleanly.** On a stop or an idle timeout it first removes its own discovery and secret files, so new clients stop finding it, and only then stops its loop. It waits (up to 15 s) for requests in progress before exiting. It removes only files that are still its own (the discovery file names its process, the secret file holds its secret), so a late shutdown can never delete the files of the server that replaced it. I looked for that last failure and could not make it happen (a new server takes longer to start than an old one takes to finish), so it is hardening, not a bug I observed.
+
+Measured with the fix: 0 failures in 60 calls at gaps of 0, 20, 100 and 300 ms after a stop, and 0 of 40 blocked in enforce mode with real hook processes. The handshake costs one round trip on loopback: 47 to 49 ms per call against 46 to 48 ms without it, within noise.
+
+**Not covered:** a server that is slow, not dying, is waited for only 3 s (`HANDSHAKE_TIMEOUT`) before the client starts another; a server killed after it has agreed to read a call is still a failed call; and the other ways a first call can race a server being started were not found, only this one.
+
 ## Not built, and tracked
 
 - **P2.6g, `http` hooks** for the tool events (about 50 ms per call, no process start): needs a live test on a Claude Code that supports them, a fixed port and a secret in the URL path of the git-ignored local settings, `SessionStart` kept as a command hook, and **2.1.295 or later** for `onFailure: "block"` in enforce mode (there is no in-process fallback on that route).
