@@ -132,7 +132,11 @@ def _dispatch(inp: HookInput, ctx: HookContext) -> HookResult:
 
 
 def _ledger(ctx: HookContext) -> Ledger:
-    return Ledger(ctx.resolve(ctx.cfg.ledger_path), lock_timeout=ctx.cfg.lock_timeout_seconds)
+    return Ledger(
+        ctx.resolve(ctx.cfg.ledger_path),
+        lock_timeout=ctx.cfg.lock_timeout_seconds,
+        rotate_bytes=ctx.cfg.ledger_rotate_bytes,
+    )
 
 
 def _store(ctx: HookContext) -> SessionStore:

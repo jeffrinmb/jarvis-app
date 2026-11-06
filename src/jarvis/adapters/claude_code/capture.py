@@ -109,7 +109,7 @@ def capture_usage(inp: HookInput, ctx: HookContext, ledger: Ledger, path: str) -
     written = 0
     with ledger.transaction() as tx:
         recorded = set()
-        for record in tx.records():
+        for record in tx.records_containing(b'"kind":"model_call"'):
             event = record["event"]
             data = event.get("data") or {}
             if (

@@ -31,6 +31,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,8 @@ from pydantic import ValidationError
 from jarvis.core.filelock import LockTimeoutError, file_lock
 from jarvis.core.schemas import Event, EventKind
 from jarvis.core.security.redact import redact_value
+
+from .summary import LedgerSummary, parse_moment
 
 GENESIS_HASH = "0" * 64
 _RECORD_KEYS = {"seq", "prev_hash", "event", "hash"}
@@ -105,6 +108,16 @@ class Segment:
         return self.last_seq - self.first_seq + 1
 
 
+@dataclass(frozen=True)
+class GateView:
+    """The history the policy gate reads for one decision: ``records`` and, when they are only
+    the active file, ``base``, the summary of everything before them. ``base`` is ``None`` when
+    ``records`` is the whole ledger."""
+
+    base: LedgerSummary | None
+    records: list[dict[str, Any]]
+
+
 def _read_records(path: Path) -> Iterator[dict[str, Any]]:
     with open(path, "rb") as fh:
         for raw in fh:
@@ -119,6 +132,12 @@ class LedgerTransaction:
 
     def records(self) -> Iterator[dict[str, Any]]:
         return self._ledger.records()
+
+    def records_containing(self, needle: bytes) -> Iterator[dict[str, Any]]:
+        return self._ledger.records_containing(needle)
+
+    def gate_view(self) -> GateView:
+        return self._ledger._gate_view()
 
     def append(self, event: Event) -> dict[str, Any]:
         return self._ledger._append_locked(event.model_dump(mode="json"))
@@ -161,7 +180,13 @@ class Ledger:
             and self.path.exists()
             and self.path.stat().st_size >= self.rotate_bytes
         ):
-            self._rotate_locked()
+            try:
+                self._rotate_locked()
+            except OSError:
+                # Rotation only keeps the ledger small. If another process has the file open
+                # (Windows refuses to rename it) the write must still go through; the next
+                # write tries again. A move that did succeed is finished just below.
+                pass
         self._ensure_link_locked()
         return self._write_locked(payload)
 
@@ -246,6 +271,7 @@ class Ledger:
             agent_id=ROTATION_AGENT,
             on_behalf_of="system",
             outcome="rotated",
+            ts=datetime.now(UTC),
             data={
                 "previous_segment": newest.path.name,
                 "previous_sha256": hashlib.sha256(newest.path.read_bytes()).hexdigest(),
@@ -255,7 +281,42 @@ class Ledger:
                 "previous_last_hash": last["hash"],
             },
         )
-        self._write_locked(event.model_dump(mode="json"))
+        payload = event.model_dump(mode="json")
+        # What the gate needs from everything before this record, so it can read only what
+        # follows (ADR 0014). It is written unredacted on purpose: it is derived from records
+        # that were already redacted, and verify recomputes it exactly.
+        stored_at = parse_moment(payload["ts"])
+        payload["data"]["summary"] = self._summary_through(newest).to_data(stored_at)
+        self._write_locked(payload)
+
+    def _summary_through(self, upto: Segment) -> LedgerSummary:
+        """The summary of every record up to the end of the segment ``upto``. It starts from the
+        newest link record that already carries one, so a rotation folds one segment, not all."""
+        segments = [s for s in self.segments() if s.first_seq <= upto.first_seq]
+        start, summary = 0, LedgerSummary()
+        for index in range(len(segments) - 1, -1, -1):
+            first = self._first_record(segments[index].path)
+            event = (first or {}).get("event") or {}
+            if event.get("kind") == EventKind.LEDGER_ROTATED.value:
+                loaded = LedgerSummary.from_data((event.get("data") or {}).get("summary"))
+                if loaded is not None:
+                    start, summary = index, loaded
+                    break
+        for segment in segments[start:]:
+            summary.fold(_read_records(segment.path))
+        return summary
+
+    def _gate_view(self) -> GateView:
+        if not self.segments():
+            return GateView(None, list(self.active_records()))  # never rotated: this is all of it
+        active = list(self.active_records())
+        if active:
+            event = active[0]["event"]
+            if event.get("kind") == EventKind.LEDGER_ROTATED.value:
+                base = LedgerSummary.from_data((event.get("data") or {}).get("summary"), keep=None)
+                if base is not None:
+                    return GateView(base, active)
+        return GateView(None, list(self.records()))  # no usable summary: read everything
 
     @contextmanager
     def _lock(self) -> Iterator[None]:
@@ -332,6 +393,18 @@ class Ledger:
         for segment in self.segments():
             yield from _read_records(segment.path)
         yield from self.active_records()
+
+    def records_containing(self, needle: bytes) -> Iterator[dict[str, Any]]:
+        """Yield the records whose stored line contains ``needle``, across every segment. A cheap
+        filter before parsing; the caller still checks the fields it cares about."""
+        paths = [s.path for s in self.segments()]
+        if self.path.exists():
+            paths.append(self.path)
+        for path in paths:
+            with open(path, "rb") as fh:
+                for raw in fh:
+                    if needle in raw:
+                        yield json.loads(raw)
 
     def active_records(self) -> Iterator[dict[str, Any]]:
         """Yield only the records of the file being written (not the archive)."""
@@ -416,6 +489,7 @@ class _Walk:
         self.prev = GENESIS_HASH
         self.count = 0
         self.head_seq: int | None = None
+        self.running = LedgerSummary()
 
     @property
     def expected(self) -> int:
@@ -453,6 +527,18 @@ class _Walk:
                 problem = _link_problem(record["event"], previous, self.prev, expected_seq)
                 if problem is not None:
                     return _fail(*where, expected_seq, problem)
+                if "summary" in (record["event"].get("data") or {}):
+                    expected = self.running.to_data(
+                        parse_moment(record["event"]["ts"]) or datetime.now(UTC)
+                    )
+                    if record["event"]["data"]["summary"] != expected:
+                        return _fail(
+                            *where,
+                            expected_seq,
+                            "the summary in the link record does not match the records before it",
+                        )
+                    self.running = LedgerSummary.from_data(expected) or LedgerSummary()
+            self.running.fold([record])
             self.prev = record["hash"]
             self.head_seq = expected_seq
             self.count += 1
