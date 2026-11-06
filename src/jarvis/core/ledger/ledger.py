@@ -13,6 +13,13 @@ pass it to ``verify(anchor=...)``.
 
 Files are always opened in binary mode so hashes do not depend on platform newlines.
 Only one writer appends at a time, guarded by a lock file.
+
+**Segments (task P2.1b, ADR 0014).** A long ledger is slow to read, so it can be *rotated*: the
+active file is moved whole into ``<name>.archive/`` (named for the sequence numbers it holds) and
+a new active file starts with a ``ledger_rotated`` record that continues the same chain (the next
+sequence number and the last record's hash) and pins the archived file's SHA-256. The chain is
+therefore one chain: ``records()``, ``verify()`` and ``head()`` read every segment in order, and
+``active_records()`` reads only the file being written. Nothing is ever deleted or rewritten.
 """
 
 from __future__ import annotations
@@ -20,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -29,11 +37,21 @@ from typing import Any
 from pydantic import ValidationError
 
 from jarvis.core.filelock import LockTimeoutError, file_lock
-from jarvis.core.schemas import Event
+from jarvis.core.schemas import Event, EventKind
 from jarvis.core.security.redact import redact_value
 
 GENESIS_HASH = "0" * 64
 _RECORD_KEYS = {"seq", "prev_hash", "event", "hash"}
+_SEGMENT_NAME = re.compile(r"^(\d{10})-(\d{10})\.jsonl$")
+ROTATION_AGENT = "jarvis-ledger"
+_LINK_FIELDS = (
+    "previous_segment",
+    "previous_sha256",
+    "previous_records",
+    "previous_first_seq",
+    "previous_last_seq",
+    "previous_last_hash",
+)
 
 
 class LedgerError(Exception):
@@ -74,6 +92,25 @@ def _fail(count: int, head_seq: int | None, head_hash: str, seq: int, msg: str) 
     return VerifyResult(False, count, head_seq, head_hash, error=msg, error_seq=seq)
 
 
+@dataclass(frozen=True)
+class Segment:
+    """An archived part of the ledger: the file and the sequence numbers its name claims."""
+
+    path: Path
+    first_seq: int
+    last_seq: int
+
+    @property
+    def records(self) -> int:
+        return self.last_seq - self.first_seq + 1
+
+
+def _read_records(path: Path) -> Iterator[dict[str, Any]]:
+    with open(path, "rb") as fh:
+        for raw in fh:
+            yield json.loads(raw)
+
+
 class LedgerTransaction:
     """Handle valid only inside ``Ledger.transaction()``; the writer lock is already held."""
 
@@ -88,9 +125,13 @@ class LedgerTransaction:
 
 
 class Ledger:
-    def __init__(self, path: str | Path, lock_timeout: float = 5.0) -> None:
+    def __init__(
+        self, path: str | Path, lock_timeout: float = 5.0, rotate_bytes: int | None = None
+    ) -> None:
         self.path = Path(path)
         self.lock_timeout = lock_timeout
+        # When set, a write that finds the active file at least this big rotates it first.
+        self.rotate_bytes = rotate_bytes
 
     # ---------- writing ----------
 
@@ -115,6 +156,16 @@ class Ledger:
         # stored, so a verified ledger never holds the redacted text.
         if "data" in payload:
             payload = {**payload, "data": redact_value(payload["data"])}
+        if (
+            self.rotate_bytes is not None
+            and self.path.exists()
+            and self.path.stat().st_size >= self.rotate_bytes
+        ):
+            self._rotate_locked()
+        self._ensure_link_locked()
+        return self._write_locked(payload)
+
+    def _write_locked(self, payload: dict[str, Any]) -> dict[str, Any]:
         last = self._last_record()
         seq = 0 if last is None else last["seq"] + 1
         prev = GENESIS_HASH if last is None else last["hash"]
@@ -131,6 +182,81 @@ class Ledger:
             os.fsync(fh.fileno())
         return record
 
+    # ---------- segments ----------
+
+    @property
+    def archive_dir(self) -> Path:
+        return self.path.with_name(self.path.stem + ".archive")
+
+    def segments(self) -> list[Segment]:
+        """The archived segments, oldest first. Files whose names do not fit are not listed here
+        (``verify`` reports them)."""
+        if not self.archive_dir.is_dir():
+            return []
+        found = []
+        for entry in self.archive_dir.iterdir():
+            named = _SEGMENT_NAME.match(entry.name)
+            if named and entry.is_file():
+                found.append(Segment(entry, int(named[1]), int(named[2])))
+        return sorted(found, key=lambda s: s.first_seq)
+
+    def rotate(self) -> Segment | None:
+        """Move the active file into the archive and start a new one that continues the chain.
+
+        Returns the new archived segment, or ``None`` when there was nothing to rotate. Safe to
+        call at any time; it takes the writer lock.
+        """
+        with self._lock():
+            return self._rotate_locked()
+
+    def _rotate_locked(self) -> Segment | None:
+        if not self.path.exists() or self.path.stat().st_size == 0:
+            return None
+        first = self._first_record(self.path)
+        last = self._tail_record(self.path)
+        if first is None or last is None:
+            return None
+        name = f"{first['seq']:010d}-{last['seq']:010d}.jsonl"
+        destination = self.archive_dir / name
+        if destination.exists():
+            raise LedgerCorruptError(
+                f"archive segment {name} already exists; refusing to replace it"
+            )
+        self.archive_dir.mkdir(parents=True, exist_ok=True)
+        os.replace(self.path, destination)  # atomic on one volume
+        segment = Segment(destination, first["seq"], last["seq"])
+        # A crash here leaves no active file; the next write links it (see _ensure_link_locked).
+        self._ensure_link_locked()
+        return segment
+
+    def _ensure_link_locked(self) -> None:
+        """When the active file is missing or empty but segments exist, write the record that
+        continues the chain and pins the newest segment."""
+        if self.path.exists() and self.path.stat().st_size > 0:
+            return
+        segments = self.segments()
+        if not segments:
+            return
+        newest = segments[-1]
+        last = self._tail_record(newest.path)
+        if last is None:
+            raise LedgerCorruptError(f"archive segment {newest.path.name} is empty")
+        event = Event(
+            kind=EventKind.LEDGER_ROTATED,
+            agent_id=ROTATION_AGENT,
+            on_behalf_of="system",
+            outcome="rotated",
+            data={
+                "previous_segment": newest.path.name,
+                "previous_sha256": hashlib.sha256(newest.path.read_bytes()).hexdigest(),
+                "previous_records": newest.records,
+                "previous_first_seq": newest.first_seq,
+                "previous_last_seq": last["seq"],
+                "previous_last_hash": last["hash"],
+            },
+        )
+        self._write_locked(event.model_dump(mode="json"))
+
     @contextmanager
     def _lock(self) -> Iterator[None]:
         lock_path = self.path.with_name(self.path.name + ".lock")
@@ -141,10 +267,32 @@ class Ledger:
             raise LedgerLockError(str(exc)) from None
 
     def _last_record(self) -> dict[str, Any] | None:
-        """Read and check only the final record, so appends stay cheap."""
-        if not self.path.exists() or self.path.stat().st_size == 0:
+        """The final record of the whole ledger, so appends stay cheap. When the active file is
+        missing or empty (a crash during rotation) it is the newest segment's last record."""
+        if self.path.exists() and self.path.stat().st_size > 0:
+            return self._tail_record(self.path)
+        segments = self.segments()
+        return self._tail_record(segments[-1].path) if segments else None
+
+    @staticmethod
+    def _first_record(path: Path) -> dict[str, Any] | None:
+        with open(path, "rb") as fh:
+            line = fh.readline()
+        if not line:
             return None
-        with open(self.path, "rb") as fh:
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise LedgerCorruptError(f"first record is not valid JSON: {exc}") from exc
+        if not isinstance(record, dict) or not isinstance(record.get("seq"), int):
+            raise LedgerCorruptError("first record has no sequence number")
+        return record
+
+    def _tail_record(self, path: Path) -> dict[str, Any] | None:
+        """Read and check only the final record of ``path``."""
+        if not path.exists() or path.stat().st_size == 0:
+            return None
+        with open(path, "rb") as fh:
             fh.seek(0, os.SEEK_END)
             size = fh.tell()
             fh.seek(size - 1)
@@ -180,12 +328,15 @@ class Ledger:
     # ---------- reading ----------
 
     def records(self) -> Iterator[dict[str, Any]]:
-        """Yield stored records without verifying them."""
-        if not self.path.exists():
-            return
-        with open(self.path, "rb") as fh:
-            for raw in fh:
-                yield json.loads(raw)
+        """Yield every stored record, archived segments first, without verifying them."""
+        for segment in self.segments():
+            yield from _read_records(segment.path)
+        yield from self.active_records()
+
+    def active_records(self) -> Iterator[dict[str, Any]]:
+        """Yield only the records of the file being written (not the archive)."""
+        if self.path.exists():
+            yield from _read_records(self.path)
 
     def head(self) -> tuple[int, str] | None:
         """Return ``(seq, hash)`` of the last record, or ``None`` when empty.
@@ -200,20 +351,82 @@ class Ledger:
         return result.head_seq, result.head_hash
 
     def verify(self, anchor: tuple[int, str] | None = None) -> VerifyResult:
-        """Check every record, and optionally that ``anchor`` is still part of the chain."""
-        prev = GENESIS_HASH
-        count = 0
-        head_seq: int | None = None
-        anchor_found = anchor is None
+        """Check every record of every segment as one chain, and optionally that ``anchor`` is
+        still part of it."""
+        state = _Walk(anchor)
+        for entry in self._unexpected_archive_files():
+            return _fail(0, None, GENESIS_HASH, 0, f"unexpected file in the archive: {entry}")
+        files: list[tuple[Path, Segment | None]] = [(s.path, s) for s in self.segments()]
+        if self.path.exists():
+            files.append((self.path, None))
+        previous: tuple[Segment, str] | None = None
+        for path, segment in files:
+            data = path.read_bytes()
+            lines = data.split(b"\n")
+            trailing = lines.pop()  # empty when the file ends with a newline
+            if trailing:
+                where = (state.count, state.head_seq, state.prev)
+                text = (
+                    "partial final line (no newline)"
+                    if segment is None
+                    else f"partial final line in {path.name} (no newline)"
+                )
+                return _fail(*where, len(lines), text)
+            if segment is not None and (
+                len(lines) != segment.records or state.expected != segment.first_seq
+            ):
+                return _fail(
+                    state.count,
+                    state.head_seq,
+                    state.prev,
+                    state.expected,
+                    f"archive {path.name} does not hold the records it is named for",
+                )
+            failure = state.walk(lines, previous)
+            if failure is not None:
+                return failure
+            if segment is not None:
+                previous = (segment, hashlib.sha256(data).hexdigest())
+        if not state.anchor_found:
+            return _fail(
+                state.count,
+                state.head_seq,
+                state.prev,
+                state.anchor[0] if state.anchor else 0,
+                "anchor not found: ledger is shorter than the anchor (truncated?)",
+            )
+        return VerifyResult(True, state.count, state.head_seq, state.prev)
 
-        data = self.path.read_bytes() if self.path.exists() else b""
-        lines = data.split(b"\n")
-        trailing = lines.pop()  # empty when the file ends with a newline
-        if trailing:
-            return _fail(0, None, GENESIS_HASH, len(lines), "partial final line (no newline)")
+    def _unexpected_archive_files(self) -> list[str]:
+        if not self.archive_dir.is_dir():
+            return []
+        return sorted(
+            e.name
+            for e in self.archive_dir.iterdir()
+            if not (_SEGMENT_NAME.match(e.name) and e.is_file())
+        )
 
-        for expected_seq, raw in enumerate(lines):
-            where = (count, head_seq, prev)
+
+class _Walk:
+    """The running state of a verification, carried across segments."""
+
+    def __init__(self, anchor: tuple[int, str] | None) -> None:
+        self.anchor = anchor
+        self.anchor_found = anchor is None
+        self.prev = GENESIS_HASH
+        self.count = 0
+        self.head_seq: int | None = None
+
+    @property
+    def expected(self) -> int:
+        return self.count
+
+    def walk(self, lines: list[bytes], previous: tuple[Segment, str] | None) -> VerifyResult | None:
+        """Check ``lines`` (one file) and move on. If this file does not start the ledger, its
+        first record must be the link to ``previous``."""
+        for position, raw in enumerate(lines):
+            expected_seq = self.count
+            where = (self.count, self.head_seq, self.prev)
             try:
                 record = json.loads(raw)
             except json.JSONDecodeError as exc:
@@ -226,7 +439,7 @@ class Ledger:
                     expected_seq,
                     f"sequence gap or reorder: expected {expected_seq}, found {record['seq']}",
                 )
-            if record["prev_hash"] != prev:
+            if record["prev_hash"] != self.prev:
                 return _fail(*where, expected_seq, "prev_hash does not match previous record")
             if record["hash"] != compute_hash(expected_seq, record["prev_hash"], record["event"]):
                 return _fail(*where, expected_seq, "hash mismatch: record was modified")
@@ -236,26 +449,42 @@ class Ledger:
                 return _fail(
                     *where, expected_seq, f"event fails schema: {exc.error_count()} errors"
                 )
-            prev = record["hash"]
-            head_seq = expected_seq
-            count += 1
-            if anchor is not None and expected_seq == anchor[0]:
-                if record["hash"] != anchor[1]:
+            if position == 0 and expected_seq > 0:
+                problem = _link_problem(record["event"], previous, self.prev, expected_seq)
+                if problem is not None:
+                    return _fail(*where, expected_seq, problem)
+            self.prev = record["hash"]
+            self.head_seq = expected_seq
+            self.count += 1
+            if self.anchor is not None and expected_seq == self.anchor[0]:
+                if record["hash"] != self.anchor[1]:
                     return _fail(
-                        count,
-                        head_seq,
-                        prev,
+                        self.count,
+                        self.head_seq,
+                        self.prev,
                         expected_seq,
                         "anchor mismatch: history was rewritten",
                     )
-                anchor_found = True
+                self.anchor_found = True
+        return None
 
-        if not anchor_found:
-            return _fail(
-                count,
-                head_seq,
-                prev,
-                anchor[0] if anchor else 0,
-                "anchor not found: ledger is shorter than the anchor (truncated?)",
-            )
-        return VerifyResult(True, count, head_seq, prev)
+
+def _link_problem(
+    event: dict[str, Any],
+    previous: tuple[Segment, str] | None,
+    prev_hash: str,
+    seq: int,
+) -> str | None:
+    """Why the first record of a later segment is not a valid link to the segment before it."""
+    if previous is None:
+        return "a segment starts without the segment before it (archive missing?)"
+    segment, sha = previous
+    data = event.get("data") or {}
+    missing = any(f not in data for f in _LINK_FIELDS)
+    if event.get("kind") != EventKind.LEDGER_ROTATED.value or missing:
+        return "a new segment does not start with a ledger_rotated record"
+    if data["previous_segment"] != segment.path.name or data["previous_sha256"] != sha:
+        return f"the archived segment {segment.path.name} is not the one the ledger recorded"
+    if data["previous_last_seq"] != seq - 1 or data["previous_last_hash"] != prev_hash:
+        return "the link record does not match the end of the previous segment"
+    return None
