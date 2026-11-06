@@ -41,7 +41,7 @@ from jarvis.core.filelock import LockTimeoutError, file_lock
 from jarvis.core.schemas import Event, EventKind
 from jarvis.core.security.redact import redact_value
 
-from .summary import LedgerSummary, parse_moment
+from .summary import LedgerSummary, as_version_1, parse_moment
 
 GENESIS_HASH = "0" * 64
 _RECORD_KEYS = {"seq", "prev_hash", "event", "hash"}
@@ -531,7 +531,12 @@ class _Walk:
                     expected = self.running.to_data(
                         parse_moment(record["event"]["ts"]) or datetime.now(UTC)
                     )
-                    if record["event"]["data"]["summary"] != expected:
+                    stored = record["event"]["data"]["summary"]
+                    if isinstance(stored, dict) and stored.get("v") == 1:
+                        shown = as_version_1(expected)  # written before hosts and volumes existed
+                    else:
+                        shown = expected
+                    if stored != shown:
                         return _fail(
                             *where,
                             expected_seq,

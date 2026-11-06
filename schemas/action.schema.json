@@ -58,6 +58,20 @@
       "title": "Agent Id",
       "type": "string"
     },
+    "data_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Size in bytes of this call's input as the adapter measured it, which bounds what a tool that sends data outward can carry. The gate counts it only for tools whose registry effect is external-comms. Filled by the adapter, not by the agent",
+      "title": "Data Bytes"
+    },
     "diff_lines": {
       "anyOf": [
         {
@@ -71,6 +85,15 @@
       "default": null,
       "description": "Lines this action changes. Unknown (null) is treated as unbounded for tools that are not read-only.",
       "title": "Diff Lines"
+    },
+    "domains": {
+      "description": "Hosts named in this call's input (a URL's host, lowercase, with no path, query or credentials). Filled by the adapter's own scan, not by the agent",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Domains",
+      "type": "array"
     },
     "environment": {
       "$ref": "#/$defs/Environment"

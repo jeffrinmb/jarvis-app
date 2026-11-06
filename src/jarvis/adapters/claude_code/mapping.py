@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import getpass
 import hashlib
+import json
 import os
 import re
 import shlex
@@ -333,6 +334,49 @@ def agent_identity(inp: HookInput, cfg: HookConfig) -> tuple[str, str]:
     return agent_id, on_behalf_of(cfg)
 
 
+MAX_DOMAINS = 20
+_MAX_SCAN_STRINGS = 200
+_URL_HOST = re.compile(
+    r"(?i)\b[a-z][a-z0-9+.-]*://(?:[^\s/@?#]*@)?(\[[0-9a-f:.]+\]|[^\s/:?#@\[\]]+)"
+)
+
+
+def _hosts_in(text: str, found: list[str]) -> None:
+    for match in _URL_HOST.finditer(text):
+        host = match.group(1).lower().rstrip(".")
+        if host and len(host) <= 253 and host not in found and len(found) < MAX_DOMAINS:
+            found.append(host)
+
+
+def domains_for(claude_tool: str, tool_input: dict[str, Any]) -> list[str]:
+    """The hosts a call names: the host of a ``WebFetch`` URL, or the hosts of any URL in an MCP
+    tool's input (strings only, bounded). A web search names no host, because the search engine
+    is the tool. Host names only: never a path, query or credentials."""
+    found: list[str] = []
+    if claude_tool == "WebFetch":
+        url = tool_input.get("url")
+        if isinstance(url, str):
+            _hosts_in(url, found)
+    elif claude_tool.startswith("mcp__"):
+        stack: list[Any] = [tool_input]
+        budget = _MAX_SCAN_STRINGS
+        while stack and budget > 0:
+            item = stack.pop()
+            if isinstance(item, str):
+                budget -= 1
+                _hosts_in(item, found)
+            elif isinstance(item, dict):
+                stack.extend(item.values())
+            elif isinstance(item, list):
+                stack.extend(item)
+    return found
+
+
+def data_bytes_for(tool_input: dict[str, Any]) -> int:
+    """The size of a call's input, which bounds what a tool that sends data can carry."""
+    return len(json.dumps(tool_input, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+
+
 def build_action(
     inp: HookInput,
     cfg: HookConfig,
@@ -361,6 +405,8 @@ def build_action(
         paths=paths,
         diff_lines=diff_lines_for(claude_tool, inp.tool_input),
         # The kinds only: the input itself is never kept (task P2.12).
+        domains=domains_for(claude_tool, inp.tool_input),
+        data_bytes=data_bytes_for(inp.tool_input),
         secrets_in_input=find_secrets_in(inp.tool_input),
         session=session_state,
     )

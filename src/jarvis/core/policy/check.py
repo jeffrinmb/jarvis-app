@@ -28,6 +28,7 @@ from jarvis.core.schemas import (
     Verdict,
 )
 from jarvis.core.schemas.approval import ApprovalRequest, ProposedScope, RequestRule
+from jarvis.core.schemas.common import Effect
 from jarvis.core.schemas.event import ToolRef
 from jarvis.core.schemas.verdict import RuleMatch
 
@@ -42,6 +43,7 @@ from .usage import (
 
 COUNTED = {Decision.ALLOW.value, Decision.COUNCIL.value, Decision.HUMAN.value}
 MAX_LOGGED_PATHS = 50
+MAX_LOGGED_DOMAINS = 20
 
 
 def prior_diff_lines(records, task_id: str | None) -> int:
@@ -95,6 +97,7 @@ def decision_event(
     extra: dict[str, Any] | None = None,
     trace_id: str | None = None,
     span_id: str | None = None,
+    outbound_bytes: int = 0,
 ) -> Event:
     """Build the audit event for a decision. ``extra`` is caller context (for example the
     harness, session and permission mode) stored under ``data["context"]``; it must already
@@ -125,6 +128,8 @@ def decision_event(
             "approval_request": verdict.approval_request,
             "fingerprint": fingerprint(action.tool_id, action.paths),
             "secrets_in_input": sorted(action.secrets_in_input),
+            "domains": action.domains[:MAX_LOGGED_DOMAINS],
+            "outbound_bytes": outbound_bytes,
             "matches": [
                 {"rule_id": m.rule_id, "category": m.category, "effect": m.effect.value}
                 for m in verdict.matches
@@ -273,12 +278,17 @@ def run_check(
 
     tool = next((t for t in registry.tools if t.id == action.tool_id), None)
     version = tool.version if tool else None
+    # What this call can carry out of the machine: its input size, for a tool that sends data.
+    sends = tool is not None and tool.effect == Effect.EXTERNAL_COMMS
+    outbound = (action.data_bytes or 0) if sends else 0
     try:
         with ledger.transaction() as tx:
             moment = now or datetime.now(UTC)
             history = _history(tx, action, policy, moment)
             prior = prior_diff_lines_from(history, action.task_id)
-            usage = usage_from_summary(history, action, policy.budgets, moment, policy.anomalies)
+            usage = usage_from_summary(
+                history, action, policy.budgets, moment, policy.anomalies, outbound
+            )
             approvals = scan_approvals((), moment, policy.approvals, base=history)
             found = detect_anomalies(policy.anomalies, usage, tool.risk.rank if tool else None)
             verdict = evaluate(
@@ -297,7 +307,9 @@ def run_check(
             if pending is not None:
                 verdict = verdict.model_copy(update={"approval_request": pending.request_id})
             if record:
-                tx.append(decision_event(action, verdict, version, extra, trace_id, span_id))
+                tx.append(
+                    decision_event(action, verdict, version, extra, trace_id, span_id, outbound)
+                )
                 for event in _limit_events(action, verdict, version, found, trace_id):
                     tx.append(event)
                 if pending is not None and pending.request_id not in approvals.requests:

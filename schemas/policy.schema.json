@@ -44,6 +44,20 @@
           "default": null,
           "title": "Denial Window"
         },
+        "max_call_bytes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trip on one call to a tool that sends data outward whose input is bigger than this many bytes",
+          "title": "Max Call Bytes"
+        },
         "max_denials": {
           "anyOf": [
             {
@@ -57,6 +71,33 @@
           "default": null,
           "description": "Trip when this many of the task's last denial_window decisions were denials, however the retries vary",
           "title": "Max Denials"
+        },
+        "max_task_bytes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trip when a task's calls to tools that send data outward have carried more than this many bytes in total, so many small calls cannot add up unnoticed",
+          "title": "Max Task Bytes"
+        },
+        "new_domain": {
+          "default": false,
+          "description": "Trip on a call that names a host no earlier call (that was not denied) named, once new_domain_min_history such calls exist",
+          "title": "New Domain",
+          "type": "boolean"
+        },
+        "new_domain_min_history": {
+          "default": 20,
+          "description": "Do not judge a host new until this many earlier decisions that were not denied named some host, so a fresh ledger does not flag every first call",
+          "minimum": 1,
+          "title": "New Domain Min History",
+          "type": "integer"
         },
         "new_tool": {
           "default": false,

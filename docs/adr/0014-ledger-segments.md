@@ -62,6 +62,7 @@ The hook rotates by default when a write finds the active file at 1,000,000 byte
 - Readers that want the whole history (`verify`, `tokens report`, OpenTelemetry export, checkpoints, the report) read all segments and are as slow as before; only the hook's own path got faster.
 - The summary grows with the number of tasks (a few dozen bytes each, so well under a megabyte a year at today's pace), because per-task totals are kept for ever: dropping one would let a resumed task start from zero. Compacting very old tasks is future work.
 - `verify` now also folds every record to recompute the summaries, so it is somewhat slower.
+- The summary has a version. P2.8c raised it to 2 (hosts seen and outbound bytes). A link written under version 1 still verifies and the gate reads the whole ledger for it until the next rotation writes a version 2 summary.
 - Retention: archives are never deleted by the framework, so "keep for at least six months" is met by leaving them alone. Access control on the archive folder is the operating system's, and compression, off-machine copies and a deletion policy are not built (P2.1b stays open for them).
 - A new event kind, `ledger_rotated`, is added (an additive schema change recorded in the changelog). A consumer that does not know the kind must ignore it, and the framework's own consumers do.
 
