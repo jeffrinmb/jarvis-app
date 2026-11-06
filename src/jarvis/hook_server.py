@@ -70,6 +70,12 @@ class HookHttpServer(ThreadingHTTPServer):
     def touch(self) -> None:
         self.last_request = time.monotonic()
 
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        """A client that leaves in the middle of a request is normal, not an error to print."""
+        if isinstance(sys.exc_info()[1], OSError):
+            return
+        super().handle_error(request, client_address)
+
     # ---------- connections in progress, so a shutdown can wait for them ----------
 
     def connection_opened(self) -> None:
@@ -185,26 +191,52 @@ class _Handler(BaseHTTPRequestHandler):
         self.server.touch()
         self._reply(200, {"ok": True, "pid": os.getpid(), "key": self.server.key, "v": PROTOCOL})
 
-    def do_POST(self) -> None:
+    def _call_length(self) -> int | None:
+        """The size of the call's body, once the request has passed every check that needs only
+        the headers; otherwise the refusal has been sent and this is ``None``."""
         if not self._authorised():
-            return
-        if self.path == "/stop":
-            self._reply(200, {"stopping": True})
-            self.server.begin_shutdown()
-            return
+            return None
         if self.path != "/hook":
             self._reply(404)
-            return
+            return None
         if not (self.headers.get("Content-Type") or "").lower().startswith("application/json"):
             self._reply(415)
-            return
+            return None
         try:
             length = int(self.headers.get("Content-Length", ""))
         except ValueError:
             self._reply(411)
-            return
+            return None
         if not 0 <= length <= MAX_BODY:
             self._reply(413)
+            return None
+        return length
+
+    def handle_expect_100(self) -> bool:
+        """Agree to read the body only for a request that will be accepted.
+
+        Saying ``100 Continue`` first and refusing afterwards made the client send a body into a
+        connection the server was about to close with that data unread, which resets the
+        connection and can discard the refusal before the client reads it (seen on Windows). A
+        request that will be refused gets its final answer now, and no body is ever sent."""
+        if self.command == "POST" and self.path == "/stop":
+            if not self._authorised():
+                return False
+        elif self._call_length() is None:
+            return False
+        self.send_response_only(100)
+        self.end_headers()
+        return True
+
+    def do_POST(self) -> None:
+        if self.path == "/stop":
+            if not self._authorised():
+                return
+            self._reply(200, {"stopping": True})
+            self.server.begin_shutdown()
+            return
+        length = self._call_length()
+        if length is None:
             return
         raw = self.rfile.read(length)
         try:

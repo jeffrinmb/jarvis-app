@@ -27,8 +27,10 @@ from test_hook_server import (
     stdin_with,
 )
 from test_hook_server import project as _shared_project
+from test_hook_server import running as _shared_running
 
-project = _shared_project  # the same fixture the main hook server tests use
+project = _shared_project  # the same fixtures the main hook server tests use
+running = _shared_running
 
 
 def listener():
@@ -311,3 +313,97 @@ def test_the_server_speaks_http_1_1_and_still_serves_one_request_per_connection(
         assert data.startswith(b"HTTP/1.1 200") and b"Connection: close" in data
     finally:
         client.stop(spec)
+
+
+# ---------- a refusal must reach the client, whatever the size of the body ----------
+
+
+def raw_exchange(spec, head_lines, body=b""):
+    """Send ``head_lines`` (with `Expect: 100-continue`) and read what the server says first."""
+    port, secret = client._credentials(spec)
+    lines = [line.format(port=port, secret=secret) for line in head_lines]
+    with socket.create_connection(("127.0.0.1", port), timeout=3) as conn:
+        conn.sendall(("\r\n".join(lines) + "\r\n\r\n").encode())
+        conn.settimeout(3)
+        first = conn.recv(65536)
+        return first
+
+
+GOOD = [
+    "POST /hook HTTP/1.1",
+    "Host: 127.0.0.1:{port}",
+    "Authorization: Bearer {secret}",
+    "Content-Type: application/json",
+    "Content-Length: 20",
+    "Expect: 100-continue",
+]
+
+
+def changed(index, line):
+    return [line if i == index else value for i, value in enumerate(GOOD)]
+
+
+@pytest.mark.parametrize(
+    ("lines", "status"),
+    [
+        (changed(2, "Authorization: Bearer not-the-secret"), b"401"),
+        (changed(1, "Host: evil.example"), b"403"),
+        (changed(0, "POST /elsewhere HTTP/1.1"), b"404"),
+        (changed(3, "Content-Type: text/plain"), b"415"),
+        (changed(4, "Content-Length: nonsense"), b"411"),
+        (changed(4, "Content-Length: 999999999"), b"413"),
+    ],
+)
+def test_a_request_that_will_be_refused_is_refused_before_any_100_continue(running, lines, status):
+    first = raw_exchange(running, lines)
+    assert first.startswith(b"HTTP/1.1 " + status), first[:60]
+    assert b"100 Continue" not in first
+
+
+def test_a_request_that_will_be_accepted_gets_its_100_continue(running):
+    assert raw_exchange(running, GOOD).startswith(b"HTTP/1.1 100 Continue")
+
+
+def test_a_stop_with_the_wrong_secret_is_refused_without_a_100(running):
+    lines = [
+        "POST /stop HTTP/1.1",
+        "Host: 127.0.0.1:{port}",
+        "Authorization: Bearer nope",
+        "Content-Length: 0",
+        "Expect: 100-continue",
+    ]
+    assert raw_exchange(running, lines).startswith(b"HTTP/1.1 401")
+    assert client.ping(running)  # and the server is still there
+
+
+@pytest.mark.parametrize("size", [50, 200_000, 2_000_000])
+def test_a_refusal_is_always_read_by_the_client_even_with_a_big_body(running, size):
+    """Seen on Windows CI: the server said 100, refused, and closed with the body unread, which
+    resets the connection and can throw the refusal away. Before the fix about 4 in 60 refusals
+    were lost with a small body and 48 in 60 with 2 MB."""
+    port, _ = client._credentials(running)
+    body = b'{"v":1,"payload":{"pad":"' + b"x" * size + b'"}}'
+    for _ in range(40):
+        status, _ = client._request(port, "wrong-secret", "POST", "/hook", body)
+        assert status == 401
+
+
+def test_a_client_that_leaves_after_the_100_changes_nothing_and_prints_nothing(
+    project, running, capsys
+):
+    from test_hook_server import decisions as recorded
+
+    port, secret = client._credentials(running)
+    head = (
+        f"POST /hook HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {secret}\r\n"
+        "Content-Type: application/json\r\nContent-Length: 500\r\nExpect: 100-continue\r\n\r\n"
+    )
+    with socket.create_connection(("127.0.0.1", port), timeout=3) as conn:
+        conn.sendall(head.encode())
+        conn.settimeout(3)
+        assert conn.recv(100).startswith(b"HTTP/1.1 100")
+    # it walks away without sending the body
+    time.sleep(0.2)
+    assert client.ping(running)
+    assert recorded(project) == []
+    assert "Traceback" not in capsys.readouterr().err
