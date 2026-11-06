@@ -154,3 +154,6 @@ Two defects showed up the first time the maintainer signed a real checkpoint, bo
 
 A fixture lesson: Windows OpenSSH refuses a private key that other users can read ("Bad permissions"), and my first throwaway key inherited loose permissions, which looked like a failure of the fix until I ran `ssh-keygen` directly.
 
+## Round 7: a ledger that slows every call
+
+Measuring the hook against ledgers of growing size showed the cost per decision rising in a straight line: 19 ms at 100 records, 44 ms at 2,000, 166 ms at 10,000 and 631 ms at 40,000, while the live ledger gained about 1,000 records a day. The gate parsed and folded every record on every call. The fix (rotation with a carried summary, ADR 0014) brought it to a flat 35 to 46 ms. Two lessons: the first benchmark wrote every event at the same instant, so the gate correctly fell back to reading everything and the result looked like no improvement until I spaced the events out, and a mutation check found that a spent single-use approval could come back to life after a rotation, which the first version of the tests did not cover.

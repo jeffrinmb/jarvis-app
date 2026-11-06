@@ -11,12 +11,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jarvis.core.schemas import Action, Decision, EventKind
+from jarvis.core.ledger.summary import COUNTED, LedgerSummary, parse_moment
+from jarvis.core.schemas import Action, Decision
 from jarvis.core.schemas.policy import Anomalies, Budgets
 
 from .matching import normalize_path
-
-COUNTED = {Decision.ALLOW.value, Decision.COUNCIL.value, Decision.HUMAN.value}
 
 
 @dataclass(frozen=True)
@@ -43,13 +42,15 @@ def fingerprint(tool_id: str, paths: list[str]) -> str:
 
 
 def _moment(ts: Any) -> datetime | None:
-    if not isinstance(ts, str):
-        return None
-    try:
-        moment = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return moment.astimezone(UTC) if moment.tzinfo else None
+    return parse_moment(ts)
+
+
+def prior_diff_lines_from(summary: LedgerSummary, task_id: str | None) -> int:
+    """Diff lines of the task's earlier decisions that did not end in deny (none for no task)."""
+    if task_id is None:
+        return 0
+    stats = summary.stats(task_id)
+    return stats.diff_lines if stats is not None else 0
 
 
 def compute_usage(
@@ -58,35 +59,40 @@ def compute_usage(
     budgets: Budgets | None,
     now: datetime,
     anomalies: Anomalies | None = None,
+    base: LedgerSummary | None = None,
 ) -> Usage:
     """Count from the ledger. A timestamp that cannot be read is not counted toward the day or
-    a burst; the per-task, loop, denial and tool counts do not depend on timestamps."""
+    a burst; the per-task, loop, denial and tool counts do not depend on timestamps.
+
+    ``base`` is the summary of the history before ``records``; without it ``records`` must be the
+    whole history."""
+    if budgets is None and anomalies is None:
+        return Usage()
+    summary = base if base is not None else LedgerSummary(keep=None)
+    return usage_from_summary(summary.fold(records), action, budgets, now, anomalies)
+
+
+def usage_from_summary(
+    summary: LedgerSummary,
+    action: Action,
+    budgets: Budgets | None,
+    now: datetime,
+    anomalies: Anomalies | None = None,
+) -> Usage:
     if budgets is None and anomalies is None:
         return Usage()
     now = now.astimezone(UTC)
     today = now.date().isoformat()
     mine = fingerprint(action.tool_id, action.paths)
-    task_calls = day_calls = history = 0
-    tool_seen = False
-    recent: list[tuple[str | None, str | None, datetime | None]] = []
-    for record in records:
-        event = record["event"]
-        if event.get("kind") != EventKind.POLICY_DECISION.value:
-            continue
-        decision = event.get("decision")
-        counted = decision in COUNTED
-        moment = _moment(event.get("ts"))
-        if counted:
-            history += 1
-            if moment is not None and moment.date().isoformat() == today:
-                day_calls += 1
-            if (event.get("tool") or {}).get("id") == action.tool_id:
-                tool_seen = True
-        if event.get("task_id") != action.task_id:
-            continue
-        if counted:
-            task_calls += 1
-        recent.append(((event.get("data") or {}).get("fingerprint"), decision, moment))
+    stats = summary.stats(action.task_id)
+    task_calls = stats.calls if stats is not None else 0
+    recent = (
+        [(fp, decision, _moment(ts)) for fp, decision, ts in stats.recent]
+        if stats is not None
+        else []
+    )
+    day_calls = summary.day_calls.get(today, 0)
+    tool_seen = action.tool_id in summary.tools_seen
 
     repeats = 0
     if budgets is not None and budgets.loop_window:
@@ -101,7 +107,7 @@ def compute_usage(
         if anomalies.burst_seconds:
             since = now - timedelta(seconds=anomalies.burst_seconds)
             burst = sum(1 for _, d, m in recent if d in COUNTED and m is not None and m >= since)
-    return Usage(task_calls, day_calls, repeats, denials, history, tool_seen, burst)
+    return Usage(task_calls, day_calls, repeats, denials, summary.history, tool_seen, burst)
 
 
 def detect_anomalies(

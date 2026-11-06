@@ -18,10 +18,12 @@ import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from itertools import chain
 from typing import Any
 
 from pydantic import ValidationError
 
+from jarvis.core.ledger.summary import LedgerSummary
 from jarvis.core.matching import matches_any, normalize_path
 from jarvis.core.schemas import Decision, EventKind, ToolEntry
 from jarvis.core.schemas.approval import ApprovalGrant, ApprovalRequest, ApprovalScope
@@ -105,12 +107,22 @@ def digest(signature: str | None) -> str | None:
 
 
 def scan_approvals(
-    records: Iterable[dict[str, Any]], now: datetime, settings: ApprovalSettings
+    records: Iterable[dict[str, Any]],
+    now: datetime,
+    settings: ApprovalSettings,
+    base: LedgerSummary | None = None,
 ) -> ApprovalState:
-    """Fold the ledger into the current approval state. ``now`` must be timezone-aware."""
+    """Fold the ledger into the current approval state. ``now`` must be timezone-aware.
+
+    ``base`` is the summary of the history before ``records``: its approval events are replayed
+    first, in order, and the grant ids it saw used are counted, so the result is the same as
+    folding the whole history."""
     now = now.astimezone(UTC)
     state = ApprovalState()
     grants: list[Grant] = []
+    if base is not None:
+        records = chain(({"event": event} for event in base.approval_events), records)
+        state.used.update(base.used_grant_ids)
     for record in records:
         event = record["event"]
         kind = event.get("kind")

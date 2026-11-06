@@ -44,6 +44,12 @@ class HookConfig(StrictModel):
     registry_path: str = ".agents/tool-registry.yaml"
     project_path: str | None = None
     ledger_path: str = ".agents/ledger/events.jsonl"
+    ledger_rotate_bytes: int | None = Field(
+        default=1_000_000,
+        ge=100_000,
+        description="Move the active ledger into the archive when a write finds it this big, "
+        "which keeps each decision's read short (ADR 0014). Unset turns rotation off",
+    )
     allowed_signers_path: str = Field(
         default=".agents/allowed-signers",
         description="Keys that may approve, read through the policy source (ADR 0010)",

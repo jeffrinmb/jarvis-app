@@ -14,6 +14,7 @@ from typing import Any
 from jarvis.core.approvals import Verifier, profile_for, request_id, restrictive, scan_approvals
 from jarvis.core.killswitch import read_halt
 from jarvis.core.ledger import Ledger, LedgerError
+from jarvis.core.ledger.summary import LedgerSummary
 from jarvis.core.matching import normalize_path
 from jarvis.core.schemas import (
     Action,
@@ -31,7 +32,13 @@ from jarvis.core.schemas.event import ToolRef
 from jarvis.core.schemas.verdict import RuleMatch
 
 from .engine import evaluate
-from .usage import Anomaly, compute_usage, detect_anomalies, fingerprint
+from .usage import (
+    Anomaly,
+    detect_anomalies,
+    fingerprint,
+    prior_diff_lines_from,
+    usage_from_summary,
+)
 
 COUNTED = {Decision.ALLOW.value, Decision.COUNCIL.value, Decision.HUMAN.value}
 MAX_LOGGED_PATHS = 50
@@ -43,19 +50,26 @@ def prior_diff_lines(records, task_id: str | None) -> int:
     Counting pending (council or human) decisions as well as allowed ones stops a large
     change being split into small pieces that each fit under a limit.
     """
-    if task_id is None:
-        return 0
-    total = 0
-    for record in records:
-        event = record["event"]
-        if event.get("kind") != EventKind.POLICY_DECISION.value:
-            continue
-        if event.get("task_id") != task_id or event.get("decision") not in COUNTED:
-            continue
-        lines = (event.get("data") or {}).get("diff_lines", 0)
-        if isinstance(lines, int) and lines > 0:
-            total += lines
-    return total
+    return prior_diff_lines_from(LedgerSummary(keep=None).fold(records), task_id)
+
+
+def _history(tx, action: Action, policy: Policy, moment: datetime) -> LedgerSummary:
+    """The folded history for this decision. After a rotation the gate starts from the summary
+    carried in the active file and folds only what follows; when the policy's windows do not fit
+    inside what the summary kept, it folds the whole ledger, which gives the same answer."""
+    view = tx.gate_view()
+    base = view.base
+    if base is not None:
+        budgets, anomalies = policy.budgets, policy.anomalies
+        if not base.exact_for(
+            action.task_id,
+            budgets.loop_window if budgets else None,
+            anomalies.denial_window if anomalies else None,
+            anomalies.burst_seconds if anomalies else None,
+            moment,
+        ):
+            return LedgerSummary(keep=None).fold(tx.records())
+    return (base or LedgerSummary(keep=None)).fold(view.records)
 
 
 def _fail_closed(policy: Policy, action: Action, reason: str) -> Verdict:
@@ -261,11 +275,11 @@ def run_check(
     version = tool.version if tool else None
     try:
         with ledger.transaction() as tx:
-            history = list(tx.records())
-            prior = prior_diff_lines(history, action.task_id)
             moment = now or datetime.now(UTC)
-            usage = compute_usage(history, action, policy.budgets, moment, policy.anomalies)
-            approvals = scan_approvals(history, moment, policy.approvals)
+            history = _history(tx, action, policy, moment)
+            prior = prior_diff_lines_from(history, action.task_id)
+            usage = usage_from_summary(history, action, policy.budgets, moment, policy.anomalies)
+            approvals = scan_approvals((), moment, policy.approvals, base=history)
             found = detect_anomalies(policy.anomalies, usage, tool.risk.rank if tool else None)
             verdict = evaluate(
                 action,
