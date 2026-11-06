@@ -143,6 +143,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--max-age-days", type=int, default=7, help="warn if the newest checkpoint is older"
     )
 
+    segments = sub.add_parser("ledger", help="the ledger's archived segments")
+    segments_sub = segments.add_subparsers(dest="ledger_command", required=True)
+    rotate = segments_sub.add_parser(
+        "rotate", help="move the active ledger into the archive and start a new segment"
+    )
+    rotate.add_argument("--ledger")
+    status = segments_sub.add_parser("status", help="list the segments and the active file")
+    status.add_argument("--ledger")
+
     checkpoint = sub.add_parser(
         "checkpoint", help="sign the ledger's head, so truncation or a rewrite is detected"
     )
@@ -460,6 +469,31 @@ def _checkpoint_command(args: argparse.Namespace, ledger: Ledger) -> int:
     return 0
 
 
+def _ledger_command(args: argparse.Namespace, ledger: Ledger) -> int:
+    if args.ledger_command == "status":
+        segments = ledger.segments()
+        for segment in segments:
+            size = segment.path.stat().st_size
+            print(f"archive {segment.path.name}: {segment.records} records ({size} bytes)")
+        active = ledger.path.stat().st_size if ledger.path.exists() else 0
+        print(f"active {ledger.path.name}: {active} bytes; {len(segments)} archived segment(s)")
+        return 0
+    result = ledger.verify()
+    if not result.ok:
+        print(f"will not rotate a ledger that fails verification: {result.error}", file=sys.stderr)
+        return 1
+    try:
+        moved = ledger.rotate()
+    except (LedgerError, OSError) as exc:
+        print(f"cannot rotate: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+    if moved is None:
+        print("nothing to rotate: the active ledger is empty")
+        return 0
+    print(f"rotated records {moved.first_seq}-{moved.last_seq} into {moved.path}")
+    return 0
+
+
 def _verify_checkpoints(args: argparse.Namespace, ledger: Ledger) -> int:
     """Check signed checkpoints after the chain itself verified. Contradictions fail; an absent
     or stale checkpoint only warns (ADR 0010)."""
@@ -560,6 +594,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "approvals":
         return run_approvals_command(args, ledger)
+
+    if args.command == "ledger":
+        return _ledger_command(args, ledger)
 
     if args.command == "log":
         if args.kind in REFUSED_KINDS:

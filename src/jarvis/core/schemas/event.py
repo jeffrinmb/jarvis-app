@@ -32,6 +32,7 @@ class EventKind(StrEnum):
     LOOP_DETECTED = "loop_detected"
     ANOMALY_DETECTED = "anomaly_detected"
     KILL_SWITCH = "kill_switch"
+    LEDGER_ROTATED = "ledger_rotated"
     ERROR = "error"
     NOTE = "note"
 

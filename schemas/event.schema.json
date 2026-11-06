@@ -32,6 +32,7 @@
         "loop_detected",
         "anomaly_detected",
         "kill_switch",
+        "ledger_rotated",
         "error",
         "note"
       ],

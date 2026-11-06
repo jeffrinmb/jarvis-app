@@ -77,7 +77,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 | Decisions log and ADRs | P0.3, P0.12, P1.6 | Partly built: ADRs 0001 to 0011 |
 | Repository settings, licence and copyright | P0.10, P0.10a | Partly built |
 | Project name and trademarks | P0.13 | Decision |
-| Policy gate follow-ups: per-day limits, an index, path-derived risk | P2.4, P2.4a | Partly built |
+| Policy gate follow-ups: per-day limits, an index, path-derived risk | P2.4, P2.4a, P2.4c, P2.4d | Partly built: the ledger can be rotated into segments (ADR 0014); the index and the other two are to do |
 | Ledger | P2.1 | Built |
 | Charter approval and the claims that still need a primary source | P0.2, P0.7 | Planned |
 | Data policy for which models see which repos (enforced by P4.7b) | P0.5 | Decision |
