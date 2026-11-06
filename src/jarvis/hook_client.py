@@ -226,7 +226,8 @@ def _spawn(spec: dict[str, Any]) -> None:
             "cwd": directory,
         }
         options.update(_spawn_options(sys.platform))
-        subprocess.Popen(command, **options)  # noqa: S603 (our own interpreter and module)
+        # Reason: our own interpreter and module, an argument list (no shell).
+        subprocess.Popen(command, **options)  # nosec B603
 
 
 def _ensure_server(spec: dict[str, Any]) -> tuple[int, str]:

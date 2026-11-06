@@ -65,7 +65,10 @@ def _run(args: list[str], data: bytes | None, timeout: int) -> subprocess.Comple
     import subprocess  # not at module level: it is slow to import and only needed here
 
     try:
-        return subprocess.run(args, input=data, capture_output=True, timeout=timeout, check=False)
+        # Reason: ssh-keygen from shutil.which, fixed flags and an argument list (no shell).
+        return subprocess.run(  # nosec B603
+            args, input=data, capture_output=True, timeout=timeout, check=False
+        )
     except subprocess.TimeoutExpired as exc:
         raise SigningError("ssh-keygen did not finish in time") from exc
     except OSError as exc:

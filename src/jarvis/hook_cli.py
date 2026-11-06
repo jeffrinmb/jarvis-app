@@ -347,7 +347,8 @@ def _claude_version_text() -> str | None:
     import subprocess
 
     try:
-        done = subprocess.run(
+        # Reason: a fixed command, and its output is only parsed as a version number.
+        done = subprocess.run(  # nosec B603 B607
             ["claude", "--version"], capture_output=True, text=True, timeout=15, check=False
         )
     except (OSError, subprocess.TimeoutExpired):
