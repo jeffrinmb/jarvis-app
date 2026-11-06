@@ -41,6 +41,13 @@ class Action(StrictModel):
         default_factory=list,
         description="Trust labels of the content that directly feeds this action",
     )
+    command_prefixes: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+        description="The first one or two plain words of each command in a shell line (for "
+        "example `git add`), never the arguments. Filled by the adapter, and only when its "
+        "configuration asks for it, so the allowed prefixes can be chosen from evidence",
+    )
     domains: list[str] = Field(
         default_factory=list,
         max_length=20,

@@ -205,6 +205,93 @@ def classify_shell(command: str, cfg: HookConfig) -> str:
     return "run"
 
 
+MAX_CHAIN = 8
+_PIPEFAIL = re.compile(r"^\s*set\s+-o\s+pipefail\s+&&\s+")
+
+
+def split_and_chain(command: str) -> list[str] | None:
+    """The parts of ``a && b && c``, split only at an ``&&`` that is outside quotes. ``None`` for
+    a command with an unbalanced quote."""
+    parts: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    i = 0
+    while i < len(command):
+        c = command[i]
+        if quote:
+            current.append(c)
+            if c == "\\" and quote == '"' and i + 1 < len(command):
+                current.append(command[i + 1])
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+            current.append(c)
+        elif command.startswith("&&", i):
+            parts.append("".join(current))
+            current = []
+            i += 2
+            continue
+        else:
+            current.append(c)
+        i += 1
+    if quote:
+        return None
+    parts.append("".join(current))
+    return parts
+
+
+def classify_command(command: str, cfg: HookConfig) -> str:
+    """``read``, ``test`` or ``run`` for a whole command line (task P2.10a).
+
+    A single command is classified exactly as ``classify_shell`` does. A chain ``a && b && c`` is
+    ``read`` or ``test`` only when **every** part is one, with nothing else in it: no ``;``, no
+    pipe, no redirect, no substitution, no second ``&``, no empty part and at most ``MAX_CHAIN``
+    parts. ``&&`` only runs the next part if the previous succeeded, so a chain of commands that are
+    each already read or test commands can do nothing that they could not do one at a time. A
+    leading ``set -o pipefail &&`` only changes how the same line reports a failure.
+    """
+    command = _PIPEFAIL.sub("", command, count=1)
+    parts = split_and_chain(command)
+    if parts is None or len(parts) > MAX_CHAIN or any(not p.strip(" 	") for p in parts):
+        return "run"
+    kinds = [classify_shell(p.strip(" 	"), cfg) for p in parts]  # a newline is not padding
+    if "run" in kinds:
+        return "run"
+    return "test" if "test" in kinds else "read"
+
+
+_WORD = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
+_COMMAND_SEPARATORS = re.compile(r"&&|\|\||[;|\n]")
+MAX_PREFIXES = 10
+
+
+def command_prefixes_for(command: str) -> list[str]:
+    """The first one or two plain words of each command in a shell line, for measuring what the
+    shell prompts are made of (task P2.10a). Never the arguments: the second word is kept only if
+    it is a plain word (not a flag, a path or an assignment), the first word is its file name
+    without any directory, and a ``cd`` is recorded without its target. Anything else is
+    ``(other)``. The ledger redacts what it stores as well."""
+    found: list[str] = []
+    for part in _COMMAND_SEPARATORS.split(command)[:MAX_PREFIXES]:
+        words = part.split()
+        if not words:
+            continue
+        first = re.split(r"[\\/]", words[0])[-1]
+        if not _WORD.match(first):
+            found.append("(other)")
+            continue
+        if first == "cd":
+            found.append("cd")
+            continue
+        second = words[1] if len(words) > 1 else ""
+        keep = second and _WORD.match(second) and not second.startswith("-")
+        found.append(f"{first} {second}" if keep else first)
+    return found
+
+
 def project_relative(path: str, project_dir: str) -> str:
     """Project-relative POSIX path when ``path`` is inside the project, else the original path.
 
@@ -389,7 +476,7 @@ def build_action(
 
     if claude_tool in SHELL_TOOLS and tool_id == "shell.run":
         command = strip_leading_cd(str(inp.tool_input.get("command") or ""), project_dir)
-        shell_class = classify_shell(strip_output_filters(command), cfg)
+        shell_class = classify_command(strip_output_filters(command), cfg)
         tool_id = {"read": "shell.read", "test": "shell.test"}.get(shell_class, "shell.run")
 
     paths = paths_for(claude_tool, inp.tool_input, project_dir)
@@ -405,6 +492,11 @@ def build_action(
         paths=paths,
         diff_lines=diff_lines_for(claude_tool, inp.tool_input),
         # The kinds only: the input itself is never kept (task P2.12).
+        command_prefixes=(
+            command_prefixes_for(str(inp.tool_input.get("command") or ""))
+            if cfg.record_command_prefixes and claude_tool in SHELL_TOOLS
+            else []
+        ),
         domains=domains_for(claude_tool, inp.tool_input),
         data_bytes=data_bytes_for(inp.tool_input),
         secrets_in_input=find_secrets_in(inp.tool_input),

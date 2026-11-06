@@ -58,6 +58,15 @@
       "title": "Agent Id",
       "type": "string"
     },
+    "command_prefixes": {
+      "description": "The first one or two plain words of each command in a shell line (for example `git add`), never the arguments. Filled by the adapter, and only when its configuration asks for it, so the allowed prefixes can be chosen from evidence",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Command Prefixes",
+      "type": "array"
+    },
     "data_bytes": {
       "anyOf": [
         {
