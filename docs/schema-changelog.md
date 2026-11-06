@@ -56,6 +56,12 @@ Every top-level document carries an integer `schema_version`. All schemas are at
 
 ### Unreleased
 
+- `action`: new optional `domains` (hosts named in the call's input, at most 20) and `data_bytes` (the input's size in bytes), both filled by the adapter's own scan and defaulting to empty and unset. The gate counts bytes only for `external-comms` tools. Existing documents are unchanged (P2.8c).
+
+- `policy`: `anomalies` gains `new_domain` (default off), `new_domain_min_history` (default 20), `max_call_bytes` and `max_task_bytes` (both unset by default). Every detector is still off until set, so existing policies behave as before (P2.8c).
+
+- Ledger summary (inside the `ledger_rotated` event's data) goes to version 2: it adds `domains_seen`, `domain_history` and per-task `out_bytes`. A version 1 summary is still accepted by `verify`, and the gate ignores it and reads the whole ledger (ADR 0014).
+
 - `event`: new `kind` member `ledger_rotated`, the first record of a new ledger segment: it continues the hash chain and pins the archived segment (name, SHA-256, first and last sequence numbers, last hash) in `data`. An additive enum member; a consumer that does not know the kind must ignore it (ADR 0014, P2.1b).
 
 - `action`: new optional `secrets_in_input`, the kinds of secret the adapter found in a call's input (never the secret). It is filled by the adapter's own scan, defaults to empty, and an agent cannot make the gate more lenient by setting it. Existing documents are unchanged.
