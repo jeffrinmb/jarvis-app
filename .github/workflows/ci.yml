@@ -93,6 +93,26 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: uv run agentctl checkpoint-history --base "$BASE_SHA"
 
+  # Static analysis of the framework's own code with Bandit (task P1.8). Any finding fails the
+  # job: fix it, or suppress it on the line with `# nosec <id>` and a reason (bandit.yaml,
+  # tests/test_static_analysis.py). Bandit is pinned to an exact version; to upgrade, change it
+  # here, run `bandit -c bandit.yaml -r src` locally and triage anything new.
+  static-analysis:
+    name: static-analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install Bandit
+        run: python -m pip install bandit==1.9.4
+      - name: Bandit
+        run: bandit -c bandit.yaml -r src
+
   # Single required check for branch protection. It passes only if every job it needs
   # succeeded, so the ruleset never needs editing when jobs or the matrix change. `always()`
   # makes it run (and fail) even when a needed job failed; a skipped required check could
@@ -100,7 +120,7 @@ jobs:
   # `needs`.
   ci-ok:
     name: ci-ok
-    needs: [test, secret-scan, checkpoint-history]
+    needs: [test, secret-scan, checkpoint-history, static-analysis]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -110,12 +130,15 @@ jobs:
           TEST_RESULT: ${{ needs.test.result }}
           SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
           CHECKPOINT_HISTORY_RESULT: ${{ needs.checkpoint-history.result }}
+          STATIC_ANALYSIS_RESULT: ${{ needs.static-analysis.result }}
         run: |
           echo "test: $TEST_RESULT"
           echo "secret-scan: $SECRET_SCAN_RESULT"
           echo "checkpoint-history: $CHECKPOINT_HISTORY_RESULT"
+          echo "static-analysis: $STATIC_ANALYSIS_RESULT"
           if [ "$TEST_RESULT" != "success" ] || [ "$SECRET_SCAN_RESULT" != "success" ] \
-            || [ "$CHECKPOINT_HISTORY_RESULT" != "success" ]; then
+            || [ "$CHECKPOINT_HISTORY_RESULT" != "success" ] \
+            || [ "$STATIC_ANALYSIS_RESULT" != "success" ]; then
             echo "A required job did not succeed."
             exit 1
           fi
