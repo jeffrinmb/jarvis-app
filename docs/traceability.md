@@ -22,7 +22,7 @@ Status: **built** (code and tests exist), **partly built**, **planned**, **decis
 | 10 | Memory as an LLM-wiki on Markdown, Obsidian optional | Charter 7.1 | P3.1, P3.1a, P3.2, P3.3, P3.3a, P3.4, P3.10 | Planned |
 | 11 | Graph memory and cheap retrieval | Charter 7.2 | P3.7, P3.8, P3.9 | Planned |
 | 12 | Reusable on greenfield and brownfield projects | Charter 5.8, 6 | P0.4, P5.0, P5.1, P5.2, P5.3, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10, P7.8 | Planned |
-| 13 | Multiple harnesses and models | Charter 8.12 | P2.6, P2.6a, P2.6c, P2.6d, P2.6e, P4.7, P7.3, P7.4, P7.14 | Partly built: the Claude Code hook runs in log-only mode on this repository, ADR 0003 |
+| 13 | Multiple harnesses and models | Charter 8.12 | P2.6, P2.6a, P2.6c, P2.6d, P2.6e, P2.6f, P2.6g, P4.7, P7.3, P7.4, P7.14 | Partly built: the Claude Code hook runs in log-only mode on this repository, ADR 0003 |
 | 14 | Governed tool and MCP access | Charter 8.3 | P4.4, P4.5, P4.5a, P4.6 | Planned |
 | 15 | Prompt-injection resistance | Charter 8.5 | P2.5, P2.6b, P4.4b, P4.12, P4.12a, P6.4 | Partly built: taint and the trifecta rule |
 | 16 | Software supply chain | Charter 8.6 | P1.5, P1.5a, P1.5b, P4.11, P4.11a, P7.12a | Partly built: pinned actions, lockfile, secret scan |
@@ -74,7 +74,7 @@ Each gap in the [threat model](threat-model.md) has an owner task, so none is on
 |---|---|---|
 | Schemas as the contract, with a changelog | P1.1, P1.2, P1.3, P1.4 | Built |
 | Threat model | P1.7 | Built |
-| Decisions log and ADRs | P0.3, P0.12, P1.6 | Partly built: ADRs 0001 to 0011 |
+| Decisions log and ADRs | P0.3, P0.12, P1.6 | Partly built: ADRs 0001 to 0012 |
 | Repository settings, licence and copyright | P0.10, P0.10a | Partly built |
 | Project name and trademarks | P0.13 | Decision |
 | Policy gate follow-ups: per-day limits, an index, path-derived risk | P2.4, P2.4a | Partly built |

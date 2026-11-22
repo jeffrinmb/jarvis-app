@@ -1,6 +1,6 @@
 # Handoff
 
-Last updated: 2026-11-02
+Last updated: 2026-11-22
 
 The current state of the work, written for whoever picks it up next: another person, another account, or another tool such as Devin. It is short on purpose and describes facts that are not already obvious from the code. The rules for working here are in [AGENTS.md](../AGENTS.md); the full plan is in [TODO.md](TODO.md).
 
@@ -8,7 +8,7 @@ The current state of the work, written for whoever picks it up next: another per
 
 ## Where things stand
 
-The project is an early build. Pull requests 1 to 25 are merged to `main`; `P2.3b` is on branch `feat/otel-collector`.
+The project is an early build. Pull requests 1 to 26 are merged to `main` (the last is `P2.3b`). `P2.6e` is on branch `perf/hook-startup-cost`: measurements and the design in ADR 0012, no code.
 
 **Built, tested and merged**
 
@@ -17,7 +17,7 @@ The project is an early build. Pull requests 1 to 25 are merged to `main`; `P2.3
 - **Policy gate** (`agentctl check`): allow, council, human or deny, with built-in guardrails, taint tracking, the lethal-trifecta rule and cumulative limits that hold under concurrency. It fails closed ([ADR 0002](adr/0002-policy-evaluation-and-fail-closed-rules.md)).
 - **Claude Code hook** (`agentctl hook run`, `snippet`, `doctor`, `report`): builds the gate's action from the real tool call. Log-only by default ([ADR 0003](adr/0003-claude-code-hook-interface.md), [the guide](claude-code-hook.md)). `agentctl halt` and `resume` are a kill switch, and the policy can carry call budgets, a loop breaker and anomaly rules ([ADR 0005](adr/0005-budgets-loop-breaker-and-kill-switch.md), [ADR 0006](adr/0006-anomaly-rules.md), `P2.8`, `P2.8a`). `agentctl approvals list|show|approve|reject` answer approval requests the gate raises ([ADR 0009](adr/0009-approval-flow.md), `P2.7`), and with `approvals.require_signatures` an approval is an SSH signature checked against an allowed-signers file ([ADR 0010](adr/0010-identity-and-signing.md), `P2.9a`). `agentctl otel export` writes the ledger as OpenTelemetry GenAI traces without any content, and the hook gives every event of a session one trace id and each tool call one span id shared by its decision and outcome (`P2.3`, `P2.3a`). `agentctl tokens record` and `report` keep a token and cost ledger ([ADR 0007](adr/0007-token-and-cost-ledger.md), `P2.2`); the Claude Code hook fills it from the session transcript on `Stop`, `SubagentStop` and `SessionEnd` ([ADR 0008](adr/0008-token-capture-from-transcripts.md), `P2.2a`). It can read policy from a git commit or an outside directory, and enforce mode refuses the agent-writable working tree ([ADR 0004](adr/0004-trusted-policy-source.md), `P2.4b`).
 - **CI**: Linux and Windows, Python 3.12 and 3.13, lint, format, about 390 tests, a secret scan over the full history, actions pinned to commit SHAs, and a single required check, `ci-ok`.
-- **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0011.
+- **Docs**: the [charter](framework-charter.md), [threat model](threat-model.md), [traceability matrix](traceability.md), [dogfood log](dogfood-log.md), ADRs 0001 to 0012 (0012, the local gate service, is Accepted and not built yet).
 
 **Not built yet:** approvals and decision cards, identity and signed events, anomaly rules for domains and data volumes, per-stage and token budgets, token and cost budgets, OpenTelemetry export, memory (the wiki), the orchestrator and pipeline, brownfield tooling, evals, the council and the visual layer. See [TODO.md](TODO.md).
 
@@ -39,6 +39,7 @@ The project is an early build. Pull requests 1 to 25 are merged to `main`; `P2.3
 | `P0.13` | Final project name and trademark check | Renaming gets harder once the hook is installed in other projects |
 | `P0.16` | Create each approver's SSH signing key (a hardware security key for anyone approving no-go zones) and add the public keys by pull request | Without a key listed, no signed approval counts; `P2.9d` cannot test the touch requirement without a real one |
 | `P2.10a` | How strict the taint rule is, and which shell prefixes are allowed | The intervention rate is too high to enforce today |
+| `P2.6f` | Whether `SessionStart` may start the local gate service ([ADR 0012](adr/0012-local-gate-service.md), accepted) or it is only started by hand | Decides if the fast path is the default; until answered, manual start only |
 | `P2.10` | Switch the hook to enforce mode | Needs `P2.9a`, Claude Code 2.1.295 or later, and a low intervention rate first |
 
 ## Recommended next steps
@@ -48,7 +49,7 @@ In this order, and why:
 1. **`P0.16` then `P2.9d`**: create the approvers' signing keys (ideally one hardware security key) so the touch requirement can be tested for real. Signed approvals are built (`P2.9a`, [ADR 0010](adr/0010-identity-and-signing.md)) but the hardware path has never run against a real key. Then **`P2.9c`** signed task credentials with the orchestrator, and **`P2.9e`** signing checkpoints on a schedule. After those, enforce mode (`P2.10`) is a decision rather than a risk.
 2. **`P2.7d`, `P2.7e`** park and resume (needs the orchestrator, `P4.1`), then the real change in a card and approval-fatigue metrics.
 3. **`P2.8b`** token and cost budgets. Build it once you have chosen limits and supplied a real price table. **`P2.3`** and **`P2.3a`** (OpenTelemetry export, with real trace ids from the hook) and **`P2.3b`** (sending with `--endpoint`) are built ([ADR 0011](adr/0011-observability-and-vault.md)); what remains is **`P2.3c`**: run it against a real collector or viewer, which has not been done, plus authentication and a cursor.
-4. **`P2.6e`** reduce the hook's cost (about one second per call today) whenever convenient; it does not block the others.
+4. **`P2.6e`, `P2.6f`** reduce the hook's cost. Measured: about 700 ms per call, nearly all import time, mostly pydantic, so lighter imports cannot reach 200 ms. [ADR 0012](adr/0012-local-gate-service.md) proposes a local service plus a stdlib-only client (about 130 ms); build it (`P2.6f`, ADR accepted), then `P2.6g` (an `http` hook).
 
 ## Known gaps and risks
 
